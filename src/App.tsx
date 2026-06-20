@@ -626,6 +626,7 @@ export default function App() {
                     bloomThreshold={bloomThreshold}
                     bloomIntensity={bloomIntensity}
                     auditLogs={auditLogs}
+                    telemetryData={telemetryData}
                   />
                 </div>
 

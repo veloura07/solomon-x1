@@ -2,19 +2,68 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
 import { gsap } from "gsap";
 import { RotateCcw, Sparkles, Activity, Shield, Cpu, RefreshCw, X, Eye, ShieldAlert, CheckCircle, Database } from "lucide-react";
-import { AgentSpec, AuditLog } from "../types";
+import { AgentSpec, AuditLog, TelemetryPoint } from "../types";
 
-// Custom Bloom Pass using multi-octave Gaussian downscaling and bright extraction
-const CustomBloomShader = {
+const LineVertShader = `
+  attribute float progress;
+  varying float vProgress;
+  void main() {
+    vProgress = progress;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const LineFragShader = `
+  uniform float uTime;
+  uniform vec3 uColor;
+  uniform float uPulseSpeed;
+  uniform float uColorIntensity;
+  varying float vProgress;
+  void main() {
+    float wave = sin(vProgress * 10.0 - uTime * uPulseSpeed * 5.0) * 0.5 + 0.5;
+    float wave2 = sin(vProgress * 22.0 - uTime * uPulseSpeed * 8.0) * 0.5 + 0.5;
+    float waveBlend = mix(pow(wave, 6.0), pow(wave2, 3.5), 0.35);
+    float glow = mix(0.15, 1.0, waveBlend) * uColorIntensity;
+    gl_FragColor = vec4(uColor * glow * 1.8, glow * 0.38);
+  }
+`;
+
+// Multi-pass Gaussian Bloom shaders and pass implementation
+const BrightShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uThreshold: { value: 0.18 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uThreshold;
+    varying vec2 vUv;
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      float luma = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
+      float factor = smoothstep(uThreshold, uThreshold + 0.15, luma);
+      gl_FragColor = vec4(texel.rgb * factor, texel.a);
+    }
+  `
+};
+
+const BlurShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     uResolution: { value: new THREE.Vector2(1, 1) },
-    uThreshold: { value: 0.18 },
-    uIntensity: { value: 1.5 }
+    uHorizontal: { value: true },
+    uKernelSize: { value: 1.0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -26,50 +75,229 @@ const CustomBloomShader = {
   fragmentShader: `
     uniform sampler2D tDiffuse;
     uniform vec2 uResolution;
-    uniform float uThreshold;
-    uniform float uIntensity;
+    uniform bool uHorizontal;
+    uniform float uKernelSize;
     varying vec2 vUv;
-
-    vec3 getBright(vec3 c) {
-      float luma = dot(c, vec3(0.299, 0.587, 0.114));
-      return (luma > uThreshold) ? (c * (luma - uThreshold) * 2.2) : vec3(0.0);
-    }
-
-    vec3 blurSample(sampler2D tex, vec2 uv, float radius) {
-      vec3 sum = vec3(0.0);
-      float total = 0.0;
-      float stepX = radius / uResolution.x;
-      float stepY = radius / uResolution.y;
-
-      for (int x = -1; x <= 1; x++) {
-        for (int y = -1; y <= 1; y++) {
-          vec2 offset = vec2(float(x), float(y)) * vec2(stepX, stepY);
-          vec3 col = texture2D(tex, uv + offset).rgb;
-          float w = 1.0 - (length(offset) * 0.45);
-          sum += col * w;
-          total += w;
+    void main() {
+      float weight[5];
+      weight[0] = 0.2270270270;
+      weight[1] = 0.1945945946;
+      weight[2] = 0.1216216216;
+      weight[3] = 0.0540540541;
+      weight[4] = 0.0162162162;
+      
+      vec2 offset = vec2(uKernelSize) / uResolution;
+      vec3 result = texture2D(tDiffuse, vUv).rgb * weight[0];
+      if (uHorizontal) {
+        for (int i = 1; i < 5; ++i) {
+          result += texture2D(tDiffuse, vUv + vec2(offset.x * float(i), 0.0)).rgb * weight[i];
+          result += texture2D(tDiffuse, vUv - vec2(offset.x * float(i), 0.0)).rgb * weight[i];
+        }
+      } else {
+        for (int i = 1; i < 5; ++i) {
+          result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * float(i))).rgb * weight[i];
+          result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * float(i))).rgb * weight[i];
         }
       }
-      return sum / total;
+      gl_FragColor = vec4(result, 1.0);
     }
+  `
+};
 
+const MultiPassBloomCompositeShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    tBloom1: { value: null as THREE.Texture | null },
+    tBloom2: { value: null as THREE.Texture | null },
+    tBloom3: { value: null as THREE.Texture | null },
+    uIntensity: { value: 1.5 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tBloom1;
+    uniform sampler2D tBloom2;
+    uniform sampler2D tBloom3;
+    uniform float uIntensity;
+    varying vec2 vUv;
     void main() {
       vec4 original = texture2D(tDiffuse, vUv);
+      vec3 bloom1 = texture2D(tBloom1, vUv).rgb;
+      vec3 bloom2 = texture2D(tBloom2, vUv).rgb;
+      vec3 bloom3 = texture2D(tBloom3, vUv).rgb;
       
-      // Triple Gaussian mipmap cascade for organic custom bloom
-      vec3 blurLevel1 = blurSample(tDiffuse, vUv, 2.5);
-      vec3 blurLevel2 = blurSample(tDiffuse, vUv, 5.5);
-      vec3 blurLevel3 = blurSample(tDiffuse, vUv, 11.0);
-
-      vec3 bright1 = getBright(blurLevel1) * 0.55;
-      vec3 bright2 = getBright(blurLevel2) * 0.35;
-      vec3 bright3 = getBright(blurLevel3) * 0.20;
-
-      vec3 finalBloom = (bright1 + bright2 + bright3) * uIntensity;
+      vec3 finalBloom = (bloom1 * 0.45 + bloom2 * 0.35 + bloom3 * 0.20) * uIntensity;
       gl_FragColor = vec4(original.rgb + finalBloom, original.a);
     }
   `
 };
+
+export class MultiPassGaussianBloomPass extends Pass {
+  threshold: number;
+  intensity: number;
+  
+  brightRT: THREE.WebGLRenderTarget | null = null;
+  rt1_h: THREE.WebGLRenderTarget | null = null;
+  rt1_v: THREE.WebGLRenderTarget | null = null;
+  rt2_h: THREE.WebGLRenderTarget | null = null;
+  rt2_v: THREE.WebGLRenderTarget | null = null;
+  rt3_h: THREE.WebGLRenderTarget | null = null;
+  rt3_v: THREE.WebGLRenderTarget | null = null;
+
+  brightQuad: FullScreenQuad;
+  blurQuad: FullScreenQuad;
+  compositeQuad: FullScreenQuad;
+
+  width: number = 0;
+  height: number = 0;
+
+  constructor(width: number, height: number, threshold: number, intensity: number) {
+    super();
+    this.threshold = threshold;
+    this.intensity = intensity;
+
+    const brightMat = new THREE.ShaderMaterial(BrightShader);
+    this.brightQuad = new FullScreenQuad(brightMat);
+
+    const blurMat = new THREE.ShaderMaterial(BlurShader);
+    this.blurQuad = new FullScreenQuad(blurMat);
+
+    const compMat = new THREE.ShaderMaterial(MultiPassBloomCompositeShader);
+    this.compositeQuad = new FullScreenQuad(compMat);
+
+    this.setSize(width, height);
+  }
+
+  setSize(width: number, height: number) {
+    if (this.width === width && this.height === height) return;
+    this.width = width;
+    this.height = height;
+
+    if (this.brightRT) this.brightRT.dispose();
+    if (this.rt1_h) this.rt1_h.dispose();
+    if (this.rt1_v) this.rt1_v.dispose();
+    if (this.rt2_h) this.rt2_h.dispose();
+    if (this.rt2_v) this.rt2_v.dispose();
+    if (this.rt3_h) this.rt3_h.dispose();
+    if (this.rt3_v) this.rt3_v.dispose();
+
+    const pars = {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat
+    };
+
+    this.brightRT = new THREE.WebGLRenderTarget(width, height, pars);
+    
+    this.rt1_h = new THREE.WebGLRenderTarget(Math.max(1, Math.floor(width / 2)), Math.max(1, Math.floor(height / 2)), pars);
+    this.rt1_v = new THREE.WebGLRenderTarget(Math.max(1, Math.floor(width / 2)), Math.max(1, Math.floor(height / 2)), pars);
+
+    this.rt2_h = new THREE.WebGLRenderTarget(Math.max(1, Math.floor(width / 4)), Math.max(1, Math.floor(height / 4)), pars);
+    this.rt2_v = new THREE.WebGLRenderTarget(Math.max(1, Math.floor(width / 4)), Math.max(1, Math.floor(height / 4)), pars);
+
+    this.rt3_h = new THREE.WebGLRenderTarget(Math.max(1, Math.floor(width / 8)), Math.max(1, Math.floor(height / 8)), pars);
+    this.rt3_v = new THREE.WebGLRenderTarget(Math.max(1, Math.floor(width / 8)), Math.max(1, Math.floor(height / 8)), pars);
+  }
+
+  render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget, deltaTime: number, maskActive: boolean) {
+    if (!this.brightRT || !this.rt1_h || !this.rt1_v || !this.rt2_h || !this.rt2_v || !this.rt3_h || !this.rt3_v) return;
+
+    const initialRenderTarget = renderer.getRenderTarget();
+
+    // 1. Bright isolating pass
+    const brightMat = this.brightQuad.material as THREE.ShaderMaterial;
+    brightMat.uniforms.tDiffuse.value = readBuffer.texture;
+    brightMat.uniforms.uThreshold.value = this.threshold;
+    renderer.setRenderTarget(this.brightRT);
+    renderer.clear();
+    this.brightQuad.render(renderer);
+
+    // 2. Blur level 1 (1/2 size)
+    const blurMat = this.blurQuad.material as THREE.ShaderMaterial;
+    blurMat.uniforms.uKernelSize.value = 1.0;
+    
+    blurMat.uniforms.tDiffuse.value = this.brightRT.texture;
+    blurMat.uniforms.uHorizontal.value = true;
+    blurMat.uniforms.uResolution.value.set(Math.max(1, this.width / 2), Math.max(1, this.height / 2));
+    renderer.setRenderTarget(this.rt1_h);
+    renderer.clear();
+    this.blurQuad.render(renderer);
+    
+    blurMat.uniforms.tDiffuse.value = this.rt1_h.texture;
+    blurMat.uniforms.uHorizontal.value = false;
+    renderer.setRenderTarget(this.rt1_v);
+    renderer.clear();
+    this.blurQuad.render(renderer);
+
+    // 3. Blur level 2 (1/4 size)
+    blurMat.uniforms.uKernelSize.value = 2.0;
+
+    blurMat.uniforms.tDiffuse.value = this.rt1_v.texture;
+    blurMat.uniforms.uHorizontal.value = true;
+    blurMat.uniforms.uResolution.value.set(Math.max(1, this.width / 4), Math.max(1, this.height / 4));
+    renderer.setRenderTarget(this.rt2_h);
+    renderer.clear();
+    this.blurQuad.render(renderer);
+
+    blurMat.uniforms.tDiffuse.value = this.rt2_h.texture;
+    blurMat.uniforms.uHorizontal.value = false;
+    renderer.setRenderTarget(this.rt2_v);
+    renderer.clear();
+    this.blurQuad.render(renderer);
+
+    // 4. Blur level 3 (1/8 size)
+    blurMat.uniforms.uKernelSize.value = 4.0;
+
+    blurMat.uniforms.tDiffuse.value = this.rt2_v.texture;
+    blurMat.uniforms.uHorizontal.value = true;
+    blurMat.uniforms.uResolution.value.set(Math.max(1, this.width / 8), Math.max(1, this.height / 8));
+    renderer.setRenderTarget(this.rt3_h);
+    renderer.clear();
+    this.blurQuad.render(renderer);
+
+    blurMat.uniforms.tDiffuse.value = this.rt3_h.texture;
+    blurMat.uniforms.uHorizontal.value = false;
+    renderer.setRenderTarget(this.rt3_v);
+    renderer.clear();
+    this.blurQuad.render(renderer);
+
+    // 5. Composite pass
+    const compMat = this.compositeQuad.material as THREE.ShaderMaterial;
+    compMat.uniforms.tDiffuse.value = readBuffer.texture;
+    compMat.uniforms.tBloom1.value = this.rt1_v.texture;
+    compMat.uniforms.tBloom2.value = this.rt2_v.texture;
+    compMat.uniforms.tBloom3.value = this.rt3_v.texture;
+    compMat.uniforms.uIntensity.value = this.intensity;
+
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(initialRenderTarget);
+      this.compositeQuad.render(renderer);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (this.clear) renderer.clear();
+      this.compositeQuad.render(renderer);
+    }
+  }
+
+  dispose() {
+    this.brightQuad.dispose();
+    this.blurQuad.dispose();
+    this.compositeQuad.dispose();
+    if (this.brightRT) this.brightRT.dispose();
+    if (this.rt1_h) this.rt1_h.dispose();
+    if (this.rt1_v) this.rt1_v.dispose();
+    if (this.rt2_h) this.rt2_h.dispose();
+    if (this.rt2_v) this.rt2_v.dispose();
+    if (this.rt3_h) this.rt3_h.dispose();
+    if (this.rt3_v) this.rt3_v.dispose();
+  }
+}
 
 // High-fidelity Camera/Object Motion Blur Shader
 const MotionBlurShader = {
@@ -326,13 +554,30 @@ function createGlowSprite(): THREE.CanvasTexture {
 }
 
 const ringVertShader = `
+  uniform float uTime;
+  uniform float uReputationScore;
   varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vViewPosition;
 
+  float getBreathingNoise(vec3 p, float time, float rep) {
+    float speed = 1.6 + (100.0 - rep) * 0.04;
+    float amplitude = 0.02 + (100.0 - rep) * 0.002;
+    
+    float n = sin(p.x * 0.9 + time * speed) * cos(p.y * 0.9 + time * speed * 0.92) * sin(p.z * 0.9 + time * speed * 1.08);
+    n += 0.45 * sin(p.x * 2.3 - time * speed * 1.15) * cos(p.z * 2.3 + time * speed * 0.85);
+    
+    return n * amplitude;
+  }
+
   void main() {
     vUv = uv;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vec3 displacedPos = position;
+    
+    float disp = getBreathingNoise(position, uTime, uReputationScore);
+    displacedPos += normal * disp;
+
+    vec4 mvPosition = modelViewMatrix * vec4(displacedPos, 1.0);
     vViewPosition = -mvPosition.xyz;
     vNormal = normalMatrix * normal;
     gl_Position = projectionMatrix * mvPosition;
@@ -438,6 +683,7 @@ interface ThreeCanvasProps {
   bloomThreshold?: number;
   bloomIntensity?: number;
   auditLogs?: AuditLog[];
+  telemetryData?: TelemetryPoint[];
 }
 
 export default function ThreeCanvas({ 
@@ -446,12 +692,27 @@ export default function ThreeCanvas({
   agents,
   bloomThreshold = 0.22,
   bloomIntensity = 1.5,
-  auditLogs = []
+  auditLogs = [],
+  telemetryData = []
 }: ThreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedIndexRef = useRef<number>(selectedRingIndex);
   const physicalRingsRef = useRef<any[]>([]);
+
+  // HUD and Telemetry references for zero-allocation Direct DOM mutations at 60 FPS
+  const hudRef = useRef<HTMLDivElement>(null);
+  const hudLoadCircleRef = useRef<SVGCircleElement>(null);
+  const hudTextLoadRef = useRef<HTMLSpanElement>(null);
+  const hudTextStatusRef = useRef<HTMLSpanElement>(null);
+  const hudTextNameRef = useRef<HTMLSpanElement>(null);
+  const hudTextMomentumRef = useRef<HTMLSpanElement>(null);
+
+  // Maintain immediate reactive refs for frame iterations
+  const agentsRef = useRef<AgentSpec[]>(agents);
+  useEffect(() => {
+    agentsRef.current = agents;
+  }, [agents]);
 
   const bloomThresholdRef = useRef<number>(bloomThreshold);
   const bloomIntensityRef = useRef<number>(bloomIntensity);
@@ -639,10 +900,12 @@ export default function ThreeCanvas({
     renderPass.clear = false; // Keep background nebula
     composer.addPass(renderPass);
 
-    const bloomPass = new ShaderPass(CustomBloomShader);
-    bloomPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
-    bloomPass.uniforms.uThreshold.value = bloomThresholdRef.current;
-    bloomPass.uniforms.uIntensity.value = bloomIntensityRef.current;
+    const bloomPass = new MultiPassGaussianBloomPass(
+      container.clientWidth,
+      container.clientHeight,
+      bloomThresholdRef.current,
+      bloomIntensityRef.current
+    );
     composer.addPass(bloomPass);
 
     // Screen Space Ambient Occlusion ShaderPass to render detailed contact soft shadows
@@ -861,6 +1124,10 @@ export default function ThreeCanvas({
         pulseIntensity: number;
       };
       rotVelocity: { x: number; y: number; z: number };
+      springStrengthFactor: number;
+      torqueBlendFactor: number;
+      dragDecayFactor: number;
+      dataStreamLine?: THREE.Line;
     }[];
 
     agents.forEach((spec) => {
@@ -896,6 +1163,7 @@ export default function ThreeCanvas({
           uPulseIntensity: { value: 1.0 },
           uDoFBlur: { value: 0.0 },
           uAccentColor: { value: new THREE.Color(spec.accentColor) },
+          uReputationScore: { value: spec.reputationScore },
         },
         depthWrite: true,
         depthTest: true,
@@ -976,6 +1244,34 @@ export default function ThreeCanvas({
       g.rotation.copy(initRot);
       scene.add(g);
 
+      // Create a persistent, faint data stream connecting the central hub to each ring
+      const linePointsCount = 20;
+      const progressArr = new Float32Array(linePointsCount);
+      const positionsArr = new Float32Array(linePointsCount * 3);
+      for (let i = 0; i < linePointsCount; i++) {
+        progressArr[i] = i / (linePointsCount - 1);
+      }
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute("position", new THREE.BufferAttribute(positionsArr, 3));
+      lineGeo.setAttribute("progress", new THREE.BufferAttribute(progressArr, 1));
+
+      const lineMat = new THREE.ShaderMaterial({
+        vertexShader: LineVertShader,
+        fragmentShader: LineFragShader,
+        uniforms: {
+          uTime: { value: 0.0 },
+          uColor: { value: new THREE.Color(spec.bandColor) },
+          uPulseSpeed: { value: 1.0 },
+          uColorIntensity: { value: 1.0 },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+
+      const dataStreamLine = new THREE.Line(lineGeo, lineMat);
+      scene.add(dataStreamLine);
+
       physicalRings.push({
         index: spec.index,
         group: g,
@@ -994,7 +1290,11 @@ export default function ThreeCanvas({
           x: (Math.random() - 0.5) * 0.15,
           y: (Math.random() - 0.5) * 0.25,
           z: (Math.random() - 0.5) * 0.10,
-        }
+        },
+        springStrengthFactor: 1.0,
+        torqueBlendFactor: 1.0,
+        dragDecayFactor: 0.932,
+        dataStreamLine,
       });
     });
 
@@ -1157,6 +1457,24 @@ export default function ThreeCanvas({
         }
       });
       dragRingIndex = closestIndex;
+
+      // Disable currently active inertial deceleration for clicked elements and kill running GSAP deceleration tweens
+      if (closestIndex !== -1) {
+        const ring = physicalRings.find((p) => p.index === closestIndex);
+        if (ring) {
+          gsap.killTweensOf(ring);
+          ring.springStrengthFactor = 0.0;
+          ring.torqueBlendFactor = 0.0;
+          ring.dragDecayFactor = 0.988;
+        }
+      } else {
+        physicalRings.forEach((p) => {
+          gsap.killTweensOf(p);
+          p.springStrengthFactor = 0.0;
+          p.torqueBlendFactor = 0.0;
+          p.dragDecayFactor = 0.988;
+        });
+      }
     };
 
     const handleMouseMoveDrag = (event: MouseEvent) => {
@@ -1194,6 +1512,34 @@ export default function ThreeCanvas({
     };
 
     const handleMouseUp = () => {
+      // Upon manual release, trigger dynamic inertia-based deceleration curves using GSAP
+      if (isDragging) {
+        let draggedRingIdx = dragRingIndex;
+        if (draggedRingIdx === -1 && selectedIndexRef.current !== -1) {
+          draggedRingIdx = selectedIndexRef.current;
+        }
+
+        const ringsToDecelerate = draggedRingIdx !== -1 
+          ? physicalRings.filter((p) => p.index === draggedRingIdx)
+          : physicalRings;
+
+        ringsToDecelerate.forEach((pr) => {
+          // Immediately reset to low-friction glide state
+          pr.springStrengthFactor = 0.0;
+          pr.torqueBlendFactor = 0.0;
+          pr.dragDecayFactor = 0.988;
+
+          // GSAP smoothly blends these factors to slow down ring rotation, simulating a sense of physical mass
+          gsap.killTweensOf(pr);
+          gsap.to(pr, {
+            springStrengthFactor: 1.0,
+            torqueBlendFactor: 1.0,
+            dragDecayFactor: 0.932,
+            duration: 3.5,
+            ease: "power2.out",
+          });
+        });
+      }
       isDragging = false;
       dragRingIndex = -1;
     };
@@ -1226,6 +1572,24 @@ export default function ThreeCanvas({
         }
       });
       dragRingIndex = closestIndex;
+
+      // Disable currently active inertial deceleration for clicked elements and kill running GSAP deceleration tweens
+      if (closestIndex !== -1) {
+        const ring = physicalRings.find((p) => p.index === closestIndex);
+        if (ring) {
+          gsap.killTweensOf(ring);
+          ring.springStrengthFactor = 0.0;
+          ring.torqueBlendFactor = 0.0;
+          ring.dragDecayFactor = 0.988;
+        }
+      } else {
+        physicalRings.forEach((p) => {
+          gsap.killTweensOf(p);
+          p.springStrengthFactor = 0.0;
+          p.torqueBlendFactor = 0.0;
+          p.dragDecayFactor = 0.988;
+        });
+      }
     };
 
     const handleTouchMove = (event: TouchEvent) => {
@@ -1281,7 +1645,7 @@ export default function ThreeCanvas({
     let physicsAccumulator = 0;
     const FIXED_TIMESTEP = 0.016666; // Fixed timestep (60 Hz clock)
 
-    let currentDPRScale = Math.min(window.devicePixelRatio, 4.0);
+    let currentDPRScale = Math.max(window.devicePixelRatio || 1.0, 3840.0 / Math.max(1.0, container.clientWidth));
     let targetDPRScale = currentDPRScale;
     let lastScalingTime = performance.now();
 
@@ -1299,17 +1663,22 @@ export default function ThreeCanvas({
       // Maintain lock-step frame spacing to eliminate refresh-rate drift
       lastRenderTime = now - (elapsed % FRAME_DURATION);
 
-      const delta = clock.getDelta();
+      let delta = clock.getDelta();
+      // Prevent jumpy rotations and extreme jitters by clamping the high-precision clock delta
+      delta = Math.max(0.0001, Math.min(0.05, delta));
       const time = clock.getElapsedTime();
+
+      // Recalculate native 4K target dynamically on container updates
+      currentDPRScale = Math.max(window.devicePixelRatio || 1.0, 3840.0 / Math.max(1.0, container.clientWidth));
 
       // Dynamic Resolution Scaling (DRS) based on frame render latency
       const scaleDelta = now - lastScalingTime;
       if (scaleDelta > 350) {
-        if (delta > 0.020) { // Slow frame detected (under ~50fps): immediately step down resolution to preserve performance
-          targetDPRScale = Math.max(1.0, targetDPRScale - 0.4);
+        if (delta > 0.0172) { // Slow frame detected (under 58 FPS): immediately fallback downsample to maintain fluid 60FPS
+          targetDPRScale = Math.max(0.75, targetDPRScale - 0.45);
           lastScalingTime = now;
-        } else if (delta < 0.015 && targetDPRScale < currentDPRScale) { // Fast frames (above 65fps) stable: gently scale back to pristine High-DPI
-          targetDPRScale = Math.min(currentDPRScale, targetDPRScale + 0.2);
+        } else if (delta < 0.0163 && targetDPRScale < currentDPRScale) { // Fast, idle frames (stable 60+ FPS): scale up towards native 4K
+          targetDPRScale = Math.min(currentDPRScale, targetDPRScale + 0.15);
           lastScalingTime = now;
         }
       }
@@ -1401,9 +1770,20 @@ export default function ThreeCanvas({
 
             // Only apply sustained target driving torque if user is not actively whipping/dragging the ring
             if (!isBeingDragged) {
-              pr.rotVelocity.x = THREE.MathUtils.lerp(pr.rotVelocity.x, targetVx, 2.5 * FIXED_TIMESTEP);
-              pr.rotVelocity.y = THREE.MathUtils.lerp(pr.rotVelocity.y, targetVy, 2.5 * FIXED_TIMESTEP);
-              pr.rotVelocity.z = THREE.MathUtils.lerp(pr.rotVelocity.z, targetVz, 2.5 * FIXED_TIMESTEP);
+              // Smoothly blend motorized torque based on GSAP torqueBlendFactor
+              pr.rotVelocity.x = THREE.MathUtils.lerp(pr.rotVelocity.x, targetVx, 2.5 * pr.torqueBlendFactor * FIXED_TIMESTEP);
+              pr.rotVelocity.y = THREE.MathUtils.lerp(pr.rotVelocity.y, targetVy, 2.5 * pr.torqueBlendFactor * FIXED_TIMESTEP);
+              pr.rotVelocity.z = THREE.MathUtils.lerp(pr.rotVelocity.z, targetVz, 2.5 * pr.torqueBlendFactor * FIXED_TIMESTEP);
+
+              // Apply high-kinetic glide decay if driving torque is temporarily bypassed during glide
+              if (pr.torqueBlendFactor < 1.0) {
+                // Blend friction: when torqueBlendFactor is low, we use the custom dragDecayFactor (closer to 1.0, very small drag)
+                const activeDragFactor = pr.dragDecayFactor * (1.15 - pr.torqueBlendFactor * 0.15);
+                const physicalDrag = Math.pow(activeDragFactor, FIXED_TIMESTEP * 25);
+                pr.rotVelocity.x *= physicalDrag;
+                pr.rotVelocity.y *= physicalDrag;
+                pr.rotVelocity.z *= physicalDrag;
+              }
             } else {
               // Under manual drag interaction, apply standard cinematic velocity friction decay to prevent spin explosion
               pr.rotVelocity.x *= Math.pow(0.95, FIXED_TIMESTEP * 25);
@@ -1430,8 +1810,8 @@ export default function ThreeCanvas({
             if (!isBeingDragged) {
               // Stiffness drives the pull back to original stable orientation
               // Damping slows down high rotation speeds smoothly over time to prevent chaotic ringing
-              const stiffness = 2.5; 
-              const damping = 1.6;
+              const stiffness = 2.5 * pr.springStrengthFactor; 
+              const damping = 1.6 * (0.2 + 0.8 * pr.springStrengthFactor);
 
               accelX = -stiffness * shortestAngleDiff(pr.group.rotation.x, pr.initRot.x) - damping * pr.rotVelocity.x;
               accelY = -stiffness * shortestAngleDiff(pr.group.rotation.y, pr.initRot.y) - damping * pr.rotVelocity.y;
@@ -1444,7 +1824,7 @@ export default function ThreeCanvas({
             pr.rotVelocity.z += accelZ * FIXED_TIMESTEP;
 
             // Apply quadratic/exponential aerodynamic air drag so high speeds decay quickly & gradually to zero
-            const physicalDrag = Math.pow(0.932, FIXED_TIMESTEP * 25);
+            const physicalDrag = Math.pow(pr.dragDecayFactor, FIXED_TIMESTEP * 25);
             pr.rotVelocity.x *= physicalDrag;
             pr.rotVelocity.y *= physicalDrag;
             pr.rotVelocity.z *= physicalDrag;
@@ -1486,11 +1866,13 @@ export default function ThreeCanvas({
 
       const isAgentActive = activeIdx !== -1;
 
-      // Hover-responsive parallax camera shift
+      // Hover-responsive parallax camera shift + Focus Zoom to selected ring
       const targetCamX = parallax.x * 12.0;
       const targetCamY = parallax.y * 10.0;
+      const targetCamZ = isAgentActive ? 95.0 : 160.0;
       camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 3.5 * delta);
       camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, 3.5 * delta);
+      camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, 2.5 * delta);
       camera.lookAt(0, 0, 0);
 
       // ─── UPDATE AND EMIT LIGHT TRAILS ───
@@ -1605,8 +1987,8 @@ export default function ThreeCanvas({
 
       // ─── DYNAMIC BLOOM PASS ADAPTATION BASED ON SELECTION & CALIBRATION ───
       const targetBloomRadius = isAgentActive ? 1.25 : 0.65;
-      bloomPass.uniforms.uIntensity.value = THREE.MathUtils.lerp(bloomPass.uniforms.uIntensity.value, (isAgentActive ? 2.35 : 1.15) * bloomIntensityRef.current, 5.0 * delta);
-      bloomPass.uniforms.uThreshold.value = bloomThresholdRef.current;
+      bloomPass.intensity = THREE.MathUtils.lerp(bloomPass.intensity, (isAgentActive ? 2.35 : 1.15) * bloomIntensityRef.current, 5.0 * delta);
+      bloomPass.threshold = bloomThresholdRef.current;
 
       // Shift workspace ambient/point lights and core material colors towards agent accent color when active
       const activeAgent = agents.find((ag) => ag.index === activeIdx);
@@ -1654,12 +2036,53 @@ export default function ThreeCanvas({
           pr.bandMesh.material.uniforms.uHoverIntensity.value = pr.animState.hoverIntensity;
           pr.bandMesh.material.uniforms.uPulseIntensity.value = pr.animState.pulseIntensity;
 
+          // Dynamically sync real-time reputation score to vertex displacement noise fields
+          const agentSpec = agentsRef.current.find((ag) => ag.index === pr.index);
+          if (agentSpec) {
+            pr.bandMesh.material.uniforms.uReputationScore.value = agentSpec.reputationScore;
+          }
+
           // Dynamic Bokeh Depth Of Field interpolation
           // If no specific ring is active, keep all clear and focused (0.0)
           // If a ring is active, blur all OTHER rings seamlessly (1.0)
           const targetDoF = (activeIdx !== -1 && !isSelected) ? 1.0 : 0.0;
           const currentDoF = pr.bandMesh.material.uniforms.uDoFBlur.value;
           pr.bandMesh.material.uniforms.uDoFBlur.value = THREE.MathUtils.lerp(currentDoF, targetDoF, 6.0 * delta);
+        }
+
+        // Update organic data stream curves connecting metropolis central hub with specialized enclaves
+        if (pr.dataStreamLine) {
+          const lineGeo = pr.dataStreamLine.geometry as THREE.BufferGeometry;
+          const posAttribute = lineGeo.attributes.position as THREE.BufferAttribute;
+          const posArray = posAttribute.array as Float32Array;
+
+          const hubPos = new THREE.Vector3(0, 0, 0); // central root hub position (metropolis center)
+          const ringPos = pr.group.position; // live dynamic position of the active ring group
+
+          const ptsCount = posAttribute.count;
+          for (let i = 0; i < ptsCount; i++) {
+            const t = i / (ptsCount - 1);
+            // Dynamic sinusoidal s-curve organic sways to render interactive wave elasticity
+            const swayMultiplier = Math.sin(t * Math.PI);
+            const swaySpeed = 1.8 + pr.index * 0.15;
+            const swayX = Math.sin(time * swaySpeed + t * Math.PI) * 0.25 * swayMultiplier;
+            const swayY = Math.cos(time * (swaySpeed * 0.8) + t * Math.PI) * 0.25 * swayMultiplier;
+
+            posArray[i * 3] = THREE.MathUtils.lerp(hubPos.x, ringPos.x, t) + swayX;
+            posArray[i * 3 + 1] = THREE.MathUtils.lerp(hubPos.y, ringPos.y, t) + swayY;
+            posArray[i * 3 + 2] = THREE.MathUtils.lerp(hubPos.z, ringPos.z, t);
+          }
+          posAttribute.needsUpdate = true;
+
+          // Sync data pool allocation weightings for transmission speeds
+          const currentAgent = agentsRef.current.find((ag) => ag.index === pr.index);
+          const currentTokenVal = currentAgent ? currentAgent.tokenPool : 1000;
+          const tokenRatio = Math.max(0.3, Math.min(2.5, currentTokenVal / 1000.0));
+
+          const lineMat = pr.dataStreamLine.material as THREE.ShaderMaterial;
+          lineMat.uniforms.uTime.value = time;
+          lineMat.uniforms.uPulseSpeed.value = tokenRatio * 1.5;
+          lineMat.uniforms.uColorIntensity.value = (isSelected ? 1.6 : 0.6) * tokenRatio;
         }
 
         // Project the physical ring spin velocity into 2D camera coordinates for camera motion blur calculations
@@ -1688,6 +2111,75 @@ export default function ThreeCanvas({
       
       // Render foreground interactive group inside the bloom composites pipeline
       composer.render();
+
+      // ─── UPDATE HUD OVERLAY COGNITIVE GAUGES ───
+      const targetHUDIndex = selectedIndexRef.current;
+      if (targetHUDIndex !== -1 && physicalRings.length > 0) {
+        const pr = physicalRings.find((r) => r.index === targetHUDIndex);
+        if (pr) {
+          const tempV3 = new THREE.Vector3();
+          tempV3.setFromMatrixPosition(pr.group.matrixWorld);
+          tempV3.project(camera);
+
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+          const projectedX = (tempV3.x * 0.5 + 0.5) * width;
+          const projectedY = (-(tempV3.y * 0.5) + 0.5) * height;
+
+          if (hudRef.current) {
+            hudRef.current.style.transform = `translate3d(${projectedX}px, ${projectedY}px, 0)`;
+            hudRef.current.style.opacity = "1";
+            hudRef.current.style.pointerEvents = "auto";
+          }
+
+          const activeAgent = agentsRef.current.find((a) => a.index === targetHUDIndex);
+          const name = activeAgent ? activeAgent.name : "Solomon Enclave";
+
+          const latestPoint = telemetryData && telemetryData.length > 0 
+            ? telemetryData[telemetryData.length - 1] 
+            : { cognitiveLoad: 48, focusLevel: 82, momentum: 74 };
+
+          const ringMod = (targetHUDIndex * 7) % 15;
+          const cogLoad = Math.max(10, Math.min(100, Math.round(latestPoint.cognitiveLoad + ringMod - 5)));
+          const momentumVal = Math.max(10, Math.min(100, Math.round(latestPoint.focusLevel + (ringMod % 5) - 2)));
+
+          let statusText = "PROCESSING";
+          if (cogLoad > 75) {
+            statusText = "HIGH LOAD COUPLING";
+          } else if (cogLoad < 35) {
+            statusText = "COGNITIVE REST";
+          } else {
+            statusText = "OPTIMIZED FLOW";
+          }
+
+          if (hudTextNameRef.current) hudTextNameRef.current.textContent = name.toUpperCase();
+          if (hudTextLoadRef.current) hudTextLoadRef.current.textContent = `${cogLoad}%`;
+          if (hudTextMomentumRef.current) hudTextMomentumRef.current.textContent = `${momentumVal}%`;
+          if (hudTextStatusRef.current) {
+            hudTextStatusRef.current.textContent = statusText;
+            if (cogLoad > 75) {
+              hudTextStatusRef.current.className = "text-red-400 font-bold tracking-wider";
+            } else if (cogLoad < 35) {
+              hudTextStatusRef.current.className = "text-sky-400 font-bold tracking-wider";
+            } else {
+              hudTextStatusRef.current.className = "text-emerald-400 font-bold tracking-wider";
+            }
+          }
+
+          if (hudLoadCircleRef.current) {
+            const r = 65;
+            const circum = 2 * Math.PI * r;
+            const strokeDashoffset = circum - (cogLoad / 100) * circum;
+            hudLoadCircleRef.current.style.strokeDasharray = `${circum}`;
+            hudLoadCircleRef.current.style.strokeDashoffset = `${strokeDashoffset}`;
+          }
+        }
+      } else {
+        if (hudRef.current) {
+          hudRef.current.style.opacity = "0";
+          hudRef.current.style.pointerEvents = "none";
+        }
+      }
     };
 
     // Pre-warm and compile both scene pipelines on the GPU to completely eliminate initial frame drops
@@ -1696,7 +2188,7 @@ export default function ThreeCanvas({
 
     animate();
 
-    // ─── PART 10: RESIZE OBSERVER ────────────────────────────────────────
+    // ─── PART 10: RESIZE OBSERVER & DEVICE PIXEL DENSITY REGISTRY ──────────
     const handleResize = () => {
       camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
@@ -1704,16 +2196,39 @@ export default function ThreeCanvas({
       composer.setSize(container.clientWidth, container.clientHeight);
       ssaoPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
       dofPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
-      bloomPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
+      bloomPass.setSize(container.clientWidth, container.clientHeight);
       motionBlurPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(container);
 
+    // Watch device pixel resolution shifts (e.g., swapping browser tabs between 4K high-density and standard displays)
+    const handleDPRResolutionChange = () => {
+      currentDPRScale = Math.max(window.devicePixelRatio || 1.0, 3840.0 / Math.max(1.0, container.clientWidth));
+      targetDPRScale = currentDPRScale;
+      bloomPass.setSize(container.clientWidth, container.clientHeight);
+    };
+
+    let dprQueryList: MediaQueryList | null = null;
+    const registerDPRShiftObserver = () => {
+      if (typeof window !== "undefined" && window.matchMedia) {
+        const dpr = window.devicePixelRatio;
+        dprQueryList = window.matchMedia(`(resolution: ${dpr}dppx)`);
+        dprQueryList.addEventListener("change", () => {
+          handleDPRResolutionChange();
+          registerDPRShiftObserver(); // re-register for the updated current resolution dppx scale
+        }, { once: true });
+      }
+    };
+    registerDPRShiftObserver();
+
     // CLEANUP
     return () => {
       cancelAnimationFrame(animationFrameId);
+      if (dprQueryList && (dprQueryList as any).removeEventListener) {
+        (dprQueryList as any).removeEventListener("change", handleDPRResolutionChange);
+      }
       container.removeEventListener("click", handleCanvasClick);
       container.removeEventListener("mousedown", handleMouseDown);
       container.removeEventListener("mousemove", handleMouseMoveDrag);
@@ -1801,6 +2316,70 @@ export default function ThreeCanvas({
       </div>
 
       <canvas ref={canvasRef} className="w-full h-full block" />
+
+      {/* Dynamic Projection HUD Overlay */}
+      <div 
+        ref={hudRef}
+        className="absolute top-0 left-0 z-30 pointer-events-none transition-opacity duration-300"
+        style={{ opacity: 0, transform: "translate3d(0, 0, 0)" }}
+      >
+        <div className="relative -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+          {/* Circular dynamic gauge around the targeted ring */}
+          <svg className="w-[170px] h-[170px] absolute" viewBox="0 0 150 150">
+            {/* Outer subtle ticks ring, very clean */}
+            <circle cx="75" cy="75" r="71" fill="none" stroke="rgba(148, 163, 184, 0.08)" strokeWidth="1" strokeDasharray="4 6" />
+            
+            {/* Dynamic cognitive load arc segment */}
+            <circle 
+              ref={hudLoadCircleRef}
+              cx="75" 
+              cy="75" 
+              r="65" 
+              fill="none" 
+              stroke="url(#cogGradient)" 
+              strokeWidth="3.5" 
+              strokeLinecap="round"
+              strokeDasharray="408.4"
+              strokeDashoffset="200"
+              className="transition-all duration-300 ease-out"
+              transform="rotate(-90 75 75)"
+            />
+            
+            <defs>
+              <linearGradient id="cogGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#c084fc" />
+                <stop offset="100%" stopColor="#f97316" />
+              </linearGradient>
+            </defs>
+          </svg>
+          
+          {/* Center indicator crosshair */}
+          <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-ping absolute" />
+          <div className="w-1 h-1 rounded-full bg-slate-300 absolute" />
+          
+          <div className="absolute left-[85px] top-[45px] w-12 h-[1px] bg-gradient-to-r from-orange-500/60 to-transparent origin-left rotate-[35deg]" />
+          
+          {/* Diagnostic box at upper right of circular gauge */}
+          <div className="absolute left-[125px] -top-[5px] bg-slate-950/90 backdrop-blur-md border border-slate-800/80 px-2.5 py-1.5 rounded-lg text-[9px] font-mono select-none min-w-[150px] shadow-xl shadow-black/80 space-y-1">
+            <div className="flex items-center gap-1.5 border-b border-slate-900 pb-1 mb-1">
+              <Cpu className="w-2.5 h-2.5 text-purple-400" />
+              <span ref={hudTextNameRef} className="text-slate-100 font-bold truncate">COGNITIVE ACTIVE</span>
+            </div>
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-slate-500">COG LOAD:</span>
+              <span ref={hudTextLoadRef} className="text-orange-400 font-bold">45%</span>
+            </div>
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-slate-500">MOMENTUM:</span>
+              <span ref={hudTextMomentumRef} className="text-purple-400 font-medium">75%</span>
+            </div>
+            <div className="flex justify-between items-center gap-2 border-t border-slate-900/40 pt-1 mt-1 text-[8px]">
+              <span className="text-slate-500">STATUS:</span>
+              <span ref={hudTextStatusRef} className="text-emerald-400 font-bold">OPTIMIZED</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ARCHETYPE INSPECTOR MODAL */}
       {selectedRingIndex !== -1 && (() => {
