@@ -1,0 +1,6 @@
+{
+  "name": "Solomon X",
+  "description": "Personal Cognitive Operating System featuring a full-stack architecture, 3D interactive Three.js archetypes, multi-tier MemoryOS, secure TrustOS biometric gates, real-time Cognitive Twin trackers, and a server-backed Gemini intelligence module.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
