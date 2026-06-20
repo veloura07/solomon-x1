@@ -5,6 +5,8 @@ import MemoryCortex from "./components/MemoryCortex";
 import TrustTerminal from "./components/TrustTerminal";
 import StateTracker from "./components/StateTracker";
 import SovereignConsole from "./components/SovereignConsole";
+import { CognitiveResourceEconomy, Layer0Firewall, EvolutionLab } from "./components/SolomonOSComponents";
+import AvatarCorePanel from "./components/AvatarCorePanel";
 import { 
   Bot, 
   Brain, 
@@ -20,7 +22,10 @@ import {
   Cpu, 
   Coins, 
   Flame,
-  Volume2
+  Volume2,
+  Lock,
+  GitBranch,
+  User
 } from "lucide-react";
 
 const INITIAL_AGENTS: AgentSpec[] = [
@@ -167,7 +172,7 @@ const INITIAL_AGENTS: AgentSpec[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'memory' | 'trust' | 'twin'>('presence');
+  const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin'>('presence');
   const [selectedRingIndex, setSelectedRingIndex] = useState(9); // Ars Regalis active by default
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
@@ -326,6 +331,197 @@ export default function App() {
     setAuditLogs([addedLog, ...auditLogs]);
   };
 
+  // 5. WebSocket Client with Exponential Backoff & State Monitoring
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsStatus, setWsStatus] = useState<'connected' | 'connecting' | 'failed'>('connecting');
+  const [wsFailedNotify, setWsFailedNotify] = useState(false);
+  const [wsNextRetrySeconds, setWsNextRetrySeconds] = useState<number>(0);
+  const reconnectTimeoutRef = useRef<any>(null);
+  const reconnectDelayRef = useRef<number>(1000);
+  const wsRef = useRef<WebSocket | null>(null);
+  const connectWebSocketRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    let countdownInterval: any = null;
+
+    const connectWebSocket = () => {
+      if (countdownInterval) clearInterval(countdownInterval);
+      setWsStatus('connecting');
+      
+      const wsUrl = (import.meta as any).env?.VITE_SOLOMON_WS_URL || "ws://localhost:8765";
+      console.log(`[SolomonOS] Unsealing secure socket channel: ${wsUrl}`);
+      
+      try {
+        const socket = new WebSocket(wsUrl);
+        wsRef.current = socket;
+
+        // Custom connection timing threshold
+        const connectionTimeout = setTimeout(() => {
+          if (socket.readyState === WebSocket.CONNECTING) {
+            console.warn("[SolomonOS] Socket connection timed out. Aborting and retrying.");
+            socket.close();
+          }
+        }, 8000);
+
+        socket.onopen = () => {
+          clearTimeout(connectionTimeout);
+          if (!isActive) return;
+          console.log("[SolomonOS] Cognitive link established successfully via WebSocket.");
+          setWsConnected(true);
+          setWsStatus('connected');
+          setWsFailedNotify(false);
+          reconnectDelayRef.current = 1000;
+          setWsNextRetrySeconds(0);
+          
+          handleAddAuditLog({
+            actor: "TrustOS Enclave",
+            action: "ESTABLISH_COGNITIVE_LINK",
+            status: "AUTHORIZED",
+            details: `Secure WebSocket interface verified. Connected to local cognitive engine at ${wsUrl}.`
+          });
+        };
+
+        socket.onmessage = (event) => {
+          if (!isActive) return;
+          try {
+            const dataJSON = JSON.parse(event.data);
+            console.log("[SolomonOS] Live frame telemetry package inbound:", dataJSON);
+            
+            if (dataJSON.event === "status") {
+              handleAddAuditLog({
+                actor: "brain.py",
+                action: "STATUS_UPDATE",
+                status: "AUTHORIZED",
+                details: `Core status transitions synced. Brain telemetry reported status is: [${dataJSON.state}]`
+              });
+            } else if (dataJSON.event === "token_stream") {
+              // Append tokens dynamically
+            } else if (dataJSON.event === "error") {
+              setChatError(dataJSON.message || "An exception occurred inside the local Ollama queue.");
+            }
+          } catch (e) {
+            console.error("[SolomonOS] Frame stream error parsing payload JSON:", e);
+          }
+        };
+
+        const handleConnectionFailure = (eventCode?: number) => {
+          clearTimeout(connectionTimeout);
+          if (!isActive) return;
+          
+          setWsConnected(false);
+          setWsStatus(prev => {
+            if (prev === 'connecting') {
+              setWsFailedNotify(true);
+            }
+            return 'failed';
+          });
+
+          // True Exponential backoff with random jitter (0 to 800ms) to prevent synchronization stampedes
+          const baseDelay = reconnectDelayRef.current;
+          const jitter = Math.random() * 800;
+          const totalDelay = Math.min(baseDelay * 2 + jitter, 30000);
+          reconnectDelayRef.current = Math.min(baseDelay * 2, 30000);
+          
+          const countdownMs = Math.round(totalDelay);
+          let remainingSeconds = Math.ceil(countdownMs / 1000);
+          setWsNextRetrySeconds(remainingSeconds);
+
+          if (countdownInterval) clearInterval(countdownInterval);
+          countdownInterval = setInterval(() => {
+            remainingSeconds -= 1;
+            setWsNextRetrySeconds(Math.max(0, remainingSeconds));
+            if (remainingSeconds <= 0) {
+              clearInterval(countdownInterval);
+            }
+          }, 1000);
+
+          console.warn(`[SolomonOS] Cognitive link suspended (Code: ${eventCode ?? 'ERR'}). Triggering exponential backoff. Retrying in ${remainingSeconds}s...`);
+
+          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isActive) connectWebSocket();
+          }, countdownMs);
+        };
+
+        socket.onclose = (event) => {
+          handleConnectionFailure(event.code);
+        };
+
+        socket.onerror = (err) => {
+          console.error("[SolomonOS] Connection fault on websocket link:", err);
+        };
+      } catch (err) {
+        setWsConnected(false);
+        setWsStatus(prev => {
+          if (prev === 'connecting') {
+            setWsFailedNotify(true);
+          }
+          return 'failed';
+        });
+
+        const baseDelay = reconnectDelayRef.current;
+        const jitter = Math.random() * 800;
+        const totalDelay = Math.min(baseDelay * 2 + jitter, 30000);
+        reconnectDelayRef.current = Math.min(baseDelay * 2, 30000);
+
+        const countdownMs = Math.round(totalDelay);
+        let remainingSeconds = Math.ceil(countdownMs / 1000);
+        setWsNextRetrySeconds(remainingSeconds);
+
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = setInterval(() => {
+          remainingSeconds -= 1;
+          setWsNextRetrySeconds(Math.max(0, remainingSeconds));
+          if (remainingSeconds <= 0) {
+            clearInterval(countdownInterval);
+          }
+        }, 1000);
+
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (isActive) connectWebSocket();
+        }, countdownMs);
+      }
+    };
+
+    connectWebSocketRef.current = connectWebSocket;
+    connectWebSocket();
+
+    return () => {
+      isActive = false;
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+    };
+  }, []);
+
+  const handleManualReconnect = () => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    reconnectDelayRef.current = 1000; // Reset initial backoff to 1s
+    setWsFailedNotify(false);
+    if (connectWebSocketRef.current) {
+      connectWebSocketRef.current();
+    }
+    handleAddAuditLog({
+      actor: "Sovereign Human",
+      action: "MANUAL_RECOVERY_TRIGGERED",
+      status: "AUTHORIZED",
+      details: "Bypassed exponential backoff timer. Forcing manual reconnection to WebSocket cognitive pool..."
+    });
+  };
+
   // Add telemetry handler
   const handleUpdateTelemetry = (newData: TelemetryPoint[]) => {
     setTelemetryData(newData);
@@ -422,6 +618,19 @@ export default function App() {
       }));
     }
 
+    // Transmit to background process if WebSocket is connected
+    if (wsConnected && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          event: "user_message",
+          ring_id: activeAgent ? activeAgent.name.toLowerCase().replace(" ", "_") : "ars_regalis",
+          content: userText
+        }));
+      } catch (err) {
+        console.error("[SolomonOS] Error transmitting frame over socket:", err);
+      }
+    }
+
     try {
       // Transform messages array to simple structure for Gemini API
       const bodyMessages = nextMessages.map(m => ({
@@ -500,10 +709,26 @@ export default function App() {
 
         {/* Global Node Status Trackers */}
         <div id="header-telemetry" className="flex items-center gap-4 text-[10px] font-mono text-slate-400">
-          <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>COGNITIVE NODE: ONLINE</span>
-          </div>
+          {wsStatus === 'connected' ? (
+            <div className="hidden lg:flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 px-3 h-8 rounded-full animate-fadeIn">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>COGNITIVE LINK: VERIFIED (WS)</span>
+            </div>
+          ) : wsStatus === 'connecting' ? (
+            <div className="hidden lg:flex items-center gap-1.5 bg-blue-950/40 border border-blue-500/20 text-blue-400 px-3 h-8 rounded-full animate-fadeIn animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              <span>CONNECTING COGNITIVE SYNAPSE...</span>
+            </div>
+          ) : (
+            <div 
+              className="hidden lg:flex items-center gap-1.5 bg-amber-950/20 border border-amber-500/35 text-amber-400 px-3 h-8 rounded-full border-dashed animate-fadeIn cursor-pointer hover:bg-amber-950/35 transition-all" 
+              onClick={handleManualReconnect}
+              title="Awaiting dynamic local loop web socket on port 8765. Click to force manual link."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span>MOCK / AWAITING COGNITIVE WS (PORT 8765)</span>
+            </div>
+          )}
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full">
             <Coins className="w-3.5 h-3.5 text-yellow-500" />
             <span>CRE TOKEN: <span className="text-yellow-400 font-bold">
@@ -523,71 +748,144 @@ export default function App() {
 
       {/* DASHBOARD GRID BODY */}
       <div className="flex-1 flex overflow-hidden relative">
+        {/* FLOATING WEBSOCKET STATUS NOTIFICATION */}
+        {wsFailedNotify && (
+          <div className="absolute top-4 right-4 z-50 w-80 p-4 bg-slate-950/95 border border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.2)] rounded-2xl font-mono text-slate-200 animate-fadeIn backdrop-blur-md">
+            <div className="flex items-start gap-3">
+              <div className="p-1.5 bg-red-950/50 border border-red-500/30 rounded-lg text-red-100/90 flex-shrink-0 animate-pulse">
+                <ShieldAlert className="w-4 h-4 text-red-400" />
+              </div>
+              <div className="flex-1 space-y-1 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold tracking-widest text-red-400">COGNITIVE LINK FAULT</span>
+                  <button 
+                    onClick={() => setWsFailedNotify(false)}
+                    className="text-slate-500 hover:text-slate-300 transition-colors text-[10px] w-4 h-4 flex items-center justify-center rounded hover:bg-slate-900 outline-none"
+                    aria-label="Dismiss Notification"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400 leading-normal">
+                  Solomon core (port 8765) went offline. Reconnection backoff timer activated.
+                </p>
+                <div className="pt-2 flex items-center justify-between gap-2">
+                  <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">
+                    RETRY IN: <span className="text-red-400">{wsNextRetrySeconds}S</span>
+                  </span>
+                  <button
+                    onClick={handleManualReconnect}
+                    className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 hover:border-red-500/50 rounded text-[9px] font-bold tracking-wider transition-all uppercase"
+                    title="Force immediate reconnect loop bypass"
+                  >
+                    FORCESYNC
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <aside className="w-16 md:w-56 flex-shrink-0 bg-slate-950 border-r border-slate-900 flex flex-col justify-between py-6">
           <div className="space-y-4">
             <div className="px-4 mb-4 hidden md:block">
               <span className="text-[9px] font-bold font-mono text-slate-500 tracking-wider">INTEGRATION LAYERS</span>
             </div>
 
-            <nav id="sidebar-nav" className="space-y-1.5 px-3">
+            <nav id="sidebar-nav" className="space-y-1 px-2 overflow-y-auto max-h-[80vh]">
               <button
                 onClick={() => setActiveTab('presence')}
-                className={`w-full flex items-center justify-center md:justify-start gap-3 h-10 px-3 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all ${
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
                   activeTab === 'presence' 
                     ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
                 }`}
               >
-                <Bot className="w-4 h-4 flex-shrink-0" />
+                <Bot className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="hidden md:inline">Cognitive Twin</span>
               </button>
 
               <button
+                onClick={() => setActiveTab('economy')}
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
+                  activeTab === 'economy' 
+                    ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">Senate & Resource</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('directives')}
-                className={`w-full flex items-center justify-center md:justify-start gap-3 h-10 px-3 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all ${
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
                   activeTab === 'directives' 
                     ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
                 }`}
               >
-                <Terminal className="w-4 h-4 flex-shrink-0" />
+                <Terminal className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="hidden md:inline">Command Console</span>
               </button>
 
               <button
+                onClick={() => setActiveTab('firewall')}
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
+                  activeTab === 'firewall' 
+                    ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">Layer 0 Firewall</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('memory')}
-                className={`w-full flex items-center justify-center md:justify-start gap-3 h-10 px-3 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all ${
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
                   activeTab === 'memory' 
                     ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
                 }`}
               >
-                <Brain className="w-4 h-4 flex-shrink-0" />
-                <span className="hidden md:inline">MemoryOS</span>
+                <Brain className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">Memory & Dreams</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('evolution')}
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
+                  activeTab === 'evolution' 
+                    ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
+                }`}
+              >
+                <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">Evolution Lab</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('trust')}
-                className={`w-full flex items-center justify-center md:justify-start gap-3 h-10 px-3 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all ${
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
                   activeTab === 'trust' 
                     ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
                 }`}
               >
-                <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-                <span className="hidden md:inline">TrustOS</span>
+                <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">TrustOS Log</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('twin')}
-                className={`w-full flex items-center justify-center md:justify-start gap-3 h-10 px-3 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all ${
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all ${
                   activeTab === 'twin' 
                     ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
                     : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
                 }`}
               >
-                <Activity className="w-4 h-4 flex-shrink-0" />
-                <span className="hidden md:inline">State tracking</span>
+                <Activity className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">Laptop Parity</span>
               </button>
             </nav>
           </div>
@@ -614,198 +912,206 @@ export default function App() {
           
           {/* Presence Core Layout (Main Solomon 3D and Dialogue panel) */}
           {activeTab === 'presence' && (
-            <div id="presence-tab" className="grid grid-cols-1 xl:grid-cols-12 gap-6 h-full items-stretch">
-              
-              {/* 3D Visualization Canvas Side */}
-              <div id="viewport-box" className="xl:col-span-7 flex flex-col gap-4">
-                <div className="flex-1 min-h-[320px] lg:min-h-[460px]">
-                  <ThreeCanvas 
-                    selectedRingIndex={selectedRingIndex}
-                    onSelectRing={handleSelectRing}
-                    agents={agents}
-                    bloomThreshold={bloomThreshold}
-                    bloomIntensity={bloomIntensity}
-                    auditLogs={auditLogs}
-                    telemetryData={telemetryData}
-                  />
-                </div>
-
-                {/* Ring selection Tray Grid */}
-                <div id="archetypes-tray" className="bg-slate-900/30 border border-slate-900 p-4 rounded-2xl">
-                  <div className="text-[10px] text-slate-500 font-mono font-bold uppercase mb-3 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-purple-400" />
-                    specialised dynamic ring senate
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                    {agents.map((ag) => (
-                      <button
-                        key={ag.index}
-                        onClick={() => handleSelectRing(ag.index)}
-                        className={`p-2.5 border rounded-xl text-left transition ${
-                          selectedRingIndex === ag.index
-                            ? "bg-purple-950/20 border-purple-500/35 shadow-lg shadow-purple-500/5 text-purple-200"
-                            : "bg-slate-950/60 border-slate-900 hover:border-slate-800 text-slate-400"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span 
-                            className="w-1.5 h-1.5 rounded-full" 
-                            style={{ backgroundColor: "#" + ag.bandColor.toString(16) }}
-                          />
-                          <span className="text-[10px] font-bold font-mono tracking-normal">{ag.name}</span>
-                        </div>
-                        <span className="text-[8px] font-mono leading-tight block truncate text-slate-500">{ag.roleDescription}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Secure Chat Client Dialogue Side */}
-              <div id="chat-client" className="xl:col-span-5 flex flex-col bg-slate-950 border border-slate-900 rounded-2xl h-[560px] xl:h-auto overflow-hidden shadow-2xl relative">
+            <div className="space-y-6">
+              <div id="presence-tab" className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
                 
-                {/* Active Agent Description Panel */}
-                <div id="agent-meta" className="px-4 py-3 bg-slate-900 border-b border-slate-850 flex items-center justify-between gap-3 relative">
-                  <div className="flex items-center gap-2.5">
-                    <div 
-                      className={`w-3 h-3 rounded-full animate-pulse shadow-md ${!activeAgent ? "bg-gradient-to-tr from-purple-400 via-orange-400 to-indigo-500" : ""}`}
-                      style={activeAgent ? { backgroundColor: "#" + activeAgent.bandColor.toString(16) } : undefined}
+                {/* 3D Visualization Canvas Side */}
+                <div id="viewport-box" className="xl:col-span-7 flex flex-col gap-4">
+                  <div className="flex-1 min-h-[320px] lg:min-h-[460px]">
+                    <ThreeCanvas 
+                      selectedRingIndex={selectedRingIndex}
+                      onSelectRing={handleSelectRing}
+                      agents={agents}
+                      bloomThreshold={bloomThreshold}
+                      bloomIntensity={bloomIntensity}
+                      auditLogs={auditLogs}
+                      telemetryData={telemetryData}
                     />
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-100 uppercase">
-                        {activeAgent ? activeAgent.name : "Solomon Senate"}
-                      </h3>
-                      <p className="text-[9px] text-purple-400 font-mono">
-                        {activeAgent ? activeAgent.roleDescription : "Concurrent Ring Senate Assembly"}
-                      </p>
-                    </div>
-                  </div>
-                  <Cpu className="w-4 h-4 text-slate-500" />
-                </div>
-
-                {/* Dialogue Stream */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/40">
-                  {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col max-w-[85%] ${
-                        msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"
-                      }`}
-                    >
-                      {msg.agentName && (
-                        <span className="text-[8px] text-purple-400/90 font-bold uppercase mb-1 font-mono tracking-wider">
-                          {msg.agentName} Core
-                        </span>
-                      )}
-                      
-                      <div className={`p-3 rounded-2xl text-xs font-mono leading-relaxed leading-normal ${
-                        msg.role === "user" 
-                          ? "bg-purple-600/10 border border-purple-500/20 text-purple-200 rounded-tr-none" 
-                          : "bg-slate-900/60 border border-slate-850/80 text-slate-300 rounded-tl-none"
-                      }`}>
-                        {msg.content}
-                      </div>
-
-                      {/* Doubt Engine epistemic analytics */}
-                      {msg.role === "assistant" && msg.doubtAnalysis && (
-                        <div className="mt-1 flex items-center gap-1.5 text-[8px] text-slate-500 font-mono tracking-normal leading-normal select-none">
-                          <span className="text-orange-400 font-semibold bg-orange-500/5 border border-orange-500/15 px-1 py-0.2 rounded font-bold">
-                            DOUBT CERT: {(msg.confidenceScore! * 100).toFixed(0)}%
-                          </span>
-                          <span className="italic">Analysis: "{msg.doubtAnalysis}"</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Sending response indicator */}
-                  {sendingChat && (
-                    <div className="flex flex-col items-start max-w-[85%]">
-                      <span className="text-[8px] text-purple-400/90 font-bold uppercase mb-1 font-mono">
-                        {activeAgent ? activeAgent.name : "Solomon Senate"} Core
-                      </span>
-                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono bg-slate-905 border border-slate-850 p-3 rounded-2xl">
-                        <svg className="animate-spin h-3.5 w-3.5 text-purple-400" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        <span>COGNITIVE PIPELINE EXPANDING SYNAPSES...</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {chatError && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-mono">
-                      {chatError}
-                    </div>
-                  )}
-
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* Prompt input forms container */}
-                <form onSubmit={handleSendPrompt} className="p-3 bg-slate-900 border-t border-slate-850 flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      placeholder={activeAgent ? `Whisper to ${activeAgent.name}...` : "Whisper to Solomon Senate Assembly..."}
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      className="w-full h-10 pl-4 pr-11 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 outline-none focus:border-purple-500/50"
-                    />
-                    
-                    {/* Speech / microphone triggering button */}
-                    <button
-                      type="button"
-                      onClick={handleTriggerSpeech}
-                      className={`absolute right-1.5 top-1.5 w-7 h-7 rounded-lg border flex items-center justify-center transition-all ${
-                        isListeningMic 
-                          ? "bg-orange-500/20 border-orange-500/40 text-orange-400 animate-pulse" 
-                          : "bg-slate-900 border-slate-800 hover:text-purple-400 text-slate-500 hover:border-purple-500/30"
-                      }`}
-                    >
-                      <Mic className="w-3.5 h-3.5" />
-                    </button>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={!chatInput.trim() || sendingChat}
-                    className="w-10 h-10 bg-purple-600 hover:bg-purple-500 text-white rounded-xl flex items-center justify-center transition disabled:opacity-50 disabled:hover:bg-purple-600"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-
-                {/* Ambient Listening Visualizer indicators */}
-                {isListeningMic && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm p-6 animate-fadeIn">
-                    <div className="flex items-center gap-1.5 h-10 mb-4 justify-center">
-                      {[...Array(6)].map((_, i) => (
-                        <span 
-                          key={i} 
-                          className="w-1 bg-purple-400 rounded animate-voiceWave shadow shadow-purple-400"
-                          style={{ 
-                            height: `${12 + Math.random() * 24}px`,
-                            animationDelay: `${i * 0.12}s`
-                          }}
-                        />
+                  {/* Ring selection Tray Grid */}
+                  <div id="archetypes-tray" className="bg-slate-900/30 border border-slate-900 p-4 rounded-2xl">
+                    <div className="text-[10px] text-slate-500 font-mono font-bold uppercase mb-3 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-purple-400" />
+                      specialised dynamic ring senate
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {agents.map((ag) => (
+                        <button
+                          key={ag.index}
+                          onClick={() => handleSelectRing(ag.index)}
+                          className={`p-2.5 border rounded-xl text-left transition ${
+                            selectedRingIndex === ag.index
+                              ? "bg-purple-950/20 border-purple-500/35 shadow-lg shadow-purple-500/5 text-purple-200"
+                              : "bg-slate-950/60 border-slate-900 hover:border-slate-800 text-slate-400"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span 
+                              className="w-1.5 h-1.5 rounded-full" 
+                              style={{ backgroundColor: "#" + ag.bandColor.toString(16) }}
+                            />
+                            <span className="text-[10px] font-bold font-mono tracking-normal">{ag.name}</span>
+                          </div>
+                          <span className="text-[8px] font-mono leading-tight block truncate text-slate-500">{ag.roleDescription}</span>
+                        </button>
                       ))}
                     </div>
-                    <span className="text-xs text-purple-400 font-mono tracking-wide animate-pulse uppercase">
-                      SENSING AUDIO WAVEFORMS IN REAL TIME
-                    </span>
-                    <button 
-                      onClick={() => setIsListeningMic(false)}
-                      className="mt-6 px-4 h-8 bg-slate-900 border border-slate-800 hover:text-red-400 hover:border-red-500/20 text-xs text-slate-400 font-mono rounded-lg transition"
-                    >
-                      TERMINATE MIC SENSE
-                    </button>
                   </div>
-                )}
+                </div>
+
+                {/* Secure Chat Client Dialogue Side */}
+                <div id="chat-client" className="xl:col-span-5 flex flex-col bg-slate-950 border border-slate-900 rounded-2xl h-[560px] xl:h-auto overflow-hidden shadow-2xl relative">
+                  
+                  {/* Active Agent Description Panel */}
+                  <div id="agent-meta" className="px-4 py-3 bg-slate-900 border-b border-slate-850 flex items-center justify-between gap-3 relative">
+                    <div className="flex items-center gap-2.5">
+                      <div 
+                        className={`w-3 h-3 rounded-full animate-pulse shadow-md ${!activeAgent ? "bg-gradient-to-tr from-purple-400 via-orange-400 to-indigo-500" : ""}`}
+                        style={activeAgent ? { backgroundColor: "#" + activeAgent.bandColor.toString(16) } : undefined}
+                      />
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-100 uppercase">
+                          {activeAgent ? activeAgent.name : "Solomon Senate"}
+                        </h3>
+                        <p className="text-[9px] text-purple-400 font-mono">
+                          {activeAgent ? activeAgent.roleDescription : "Concurrent Ring Senate Assembly"}
+                        </p>
+                      </div>
+                    </div>
+                    <Cpu className="w-4 h-4 text-slate-500" />
+                  </div>
+
+                  {/* Dialogue Stream */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/40">
+                    {messages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col max-w-[85%] ${
+                          msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"
+                        }`}
+                      >
+                        {msg.agentName && (
+                          <span className="text-[8px] text-purple-400/90 font-bold uppercase mb-1 font-mono tracking-wider">
+                            {msg.agentName} Core
+                          </span>
+                        )}
+                        
+                        <div className={`p-3 rounded-2xl text-xs font-mono leading-relaxed leading-normal ${
+                          msg.role === "user" 
+                            ? "bg-purple-600/10 border border-purple-500/20 text-purple-200 rounded-tr-none" 
+                            : "bg-slate-900/60 border border-slate-855 text-slate-300 rounded-tl-none"
+                        }`}>
+                          {msg.content}
+                        </div>
+
+                        {/* Doubt Engine epistemic analytics */}
+                        {msg.role === "assistant" && msg.doubtAnalysis && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[8px] text-slate-500 font-mono tracking-normal leading-normal select-none">
+                            <span className="text-orange-400 font-semibold bg-orange-500/5 border border-orange-500/15 px-1 py-0.2 rounded font-bold">
+                              DOUBT CERT: {(msg.confidenceScore! * 100).toFixed(0)}%
+                            </span>
+                            <span className="italic">Analysis: "{msg.doubtAnalysis}"</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Sending response indicator */}
+                    {sendingChat && (
+                      <div className="flex flex-col items-start max-w-[85%]">
+                        <span className="text-[8px] text-purple-400/90 font-bold uppercase mb-1 font-mono">
+                          {activeAgent ? activeAgent.name : "Solomon Senate"} Core
+                        </span>
+                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono bg-slate-905 border border-slate-850 p-3 rounded-2xl">
+                          <svg className="animate-spin h-3.5 w-3.5 text-purple-400" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          <span>COGNITIVE PIPELINE EXPANDING SYNAPSES...</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {chatError && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-mono">
+                        {chatError}
+                      </div>
+                    )}
+
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  {/* Prompt input forms container */}
+                  <form onSubmit={handleSendPrompt} className="p-3 bg-slate-900 border-t border-slate-850 flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder={activeAgent ? `Whisper to ${activeAgent.name}...` : "Whisper to Solomon Senate Assembly..."}
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        className="w-full h-10 pl-4 pr-11 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 outline-none focus:border-purple-500/50"
+                      />
+                      
+                      {/* Speech / microphone triggering button */}
+                      <button
+                        type="button"
+                        onClick={handleTriggerSpeech}
+                        className={`absolute right-1.5 top-1.5 w-7 h-7 rounded-lg border flex items-center justify-center transition-all ${
+                          isListeningMic 
+                            ? "bg-orange-500/20 border-orange-500/40 text-orange-400 animate-pulse" 
+                            : "bg-slate-900 border-slate-800 hover:text-purple-400 text-slate-500 hover:border-purple-500/30"
+                        }`}
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!chatInput.trim() || sendingChat}
+                      className="w-10 h-10 bg-purple-600 hover:bg-purple-500 text-white rounded-xl flex items-center justify-center transition disabled:opacity-50 disabled:hover:bg-purple-600"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+
+                  {/* Ambient Listening Visualizer indicators */}
+                  {isListeningMic && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm p-6 animate-fadeIn font-mono">
+                      <div className="flex items-center gap-1.5 h-10 mb-4 justify-center">
+                        {[...Array(6)].map((_, i) => (
+                          <span 
+                            key={i} 
+                            className="w-1 bg-purple-400 rounded animate-voiceWave shadow shadow-purple-400"
+                            style={{ 
+                              height: `${12 + Math.random() * 24}px`,
+                              animationDelay: `${i * 0.12}s`
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs text-purple-400 font-mono tracking-wide animate-pulse uppercase">
+                        SENSING AUDIO WAVEFORMS IN REAL TIME
+                      </span>
+                      <button 
+                        onClick={() => setIsListeningMic(false)}
+                        className="mt-6 px-4 h-8 bg-slate-900 border border-slate-800 hover:text-red-400 hover:border-red-500/20 text-xs text-slate-400 font-mono rounded-lg transition"
+                      >
+                        TERMINATE MIC SENSE
+                      </button>
+                    </div>
+                  )}
+
+                </div>
 
               </div>
 
+              {/* real-time calibrated responsive avatar core */}
+              <AvatarCorePanel 
+                activeAgentName={activeAgent ? activeAgent.name : "Solomon Senate"}
+                activeAgentColor={activeAgent ? activeAgent.bandColor : 0x8b0000}
+              />
             </div>
           )}
 
@@ -887,6 +1193,28 @@ export default function App() {
           )}
 
           {/* MemoryOS Tab Component */}
+          {activeTab === 'economy' && (
+            <CognitiveResourceEconomy 
+              agents={agents}
+              onAddAuditLog={handleAddAuditLog}
+              onUpdateAgentPool={(index, amt) => {
+                setAgents(prev => prev.map(ag => ag.index === index ? { ...ag, tokenPool: ag.tokenPool + amt } : ag));
+              }}
+            />
+          )}
+
+          {activeTab === 'firewall' && (
+            <Layer0Firewall 
+              onAddAuditLog={handleAddAuditLog}
+            />
+          )}
+
+          {activeTab === 'evolution' && (
+            <EvolutionLab 
+              onAddAuditLog={handleAddAuditLog}
+            />
+          )}
+
           {activeTab === 'memory' && (
             <MemoryCortex 
               memoryItems={memoryItems}

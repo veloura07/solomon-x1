@@ -10,7 +10,7 @@ export interface Message {
 
 export interface MemoryItem {
   id: string;
-  horizon: 'L1_Sensory' | 'L2_Conversational' | 'L3_Episodic';
+  horizon: 'L1_Sensory' | 'L2_Conversational' | 'L3_Episodic' | 'L4_Relational' | 'L5_Semantic' | 'L6_Procedural' | 'L7_IntentScheduler' | 'L8_Wisdom' | 'L9_LegacyLedger';
   summary: string;
   detailedContent: string;
   category: string;

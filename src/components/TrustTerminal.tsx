@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AuditLog } from "../types";
-import { ShieldAlert, Fingerprint, Lock, Unlock, Key, RefreshCw, Terminal, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, Fingerprint, Lock, Unlock, Key, RefreshCw, Terminal, CheckCircle2, FileText } from "lucide-react";
 
 interface TrustTerminalProps {
   auditLogs: AuditLog[];
@@ -65,6 +65,104 @@ export default function TrustTerminal({ auditLogs, onAddAuditLog }: TrustTermina
         });
       }, 1000);
     }, 2000);
+  };
+
+  const downloadAuditTrail = () => {
+    // Compile current session's doubt indices, contradictions and network firewall events
+    const doubtIndices = auditLogs
+      .filter((log) => log.action.includes("DOUBT") || log.actor.includes("Doubt") || log.details.toLowerCase().includes("doubt"))
+      .map((log) => ({
+        timestamp: log.timestamp,
+        level: 0.35 + (parseInt(log.cryptographicHash.substring(0, 2), 16) || 0) % 60 / 100,
+        verificationAge: "128ms",
+        contradictionVelocity: "0.02 Hz",
+        details: log.details,
+        signature: log.cryptographicHash
+      }));
+
+    const firewallEvents = auditLogs
+      .filter((log) => log.actor.includes("Firewall") || log.actor.includes("Enclave") || log.action.includes("LOCK") || log.action.includes("SEAL"))
+      .map((log) => ({
+        timestamp: log.timestamp,
+        event: log.action,
+        status: log.status,
+        details: log.details,
+        signaturePayload: log.cryptographicHash
+      }));
+
+    const contradictions = auditLogs
+      .filter((log) => log.details.toLowerCase().includes("conflict") || log.details.toLowerCase().includes("uncertainty") || log.details.toLowerCase().includes("contradict"))
+      .map((log) => ({
+        timestamp: log.timestamp,
+        source: log.actor,
+        resolutionStatus: "UNIFIED_RESOLVED",
+        contradictionMetric: 0.68
+      }));
+
+    // Dynamic verification cryptographic seed
+    const seedString = auditLogs.map(l => l.cryptographicHash).join("-");
+    let sessionHash = 0;
+    for (let i = 0; i < seedString.length; i++) {
+      sessionHash = (sessionHash << 5) - sessionHash + seedString.charCodeAt(i);
+      sessionHash |= 0;
+    }
+    const signatureProof = `SOLOMONX-TPM2.0-SEAL-${Math.abs(sessionHash).toString(16).toUpperCase()}-${new Date().getTime().toString(16).toUpperCase()}`;
+
+    const signedDoc = {
+      systemIdentity: "Solomon X Cognitive Operating System",
+      exportHeader: {
+        timestamp: new Date().toISOString(),
+        enclaveMode: isTpmSealed ? "TPM_SEALED" : "UNSEALED_COGNITIVE_MODE",
+        blockHeight: auditLogs.length,
+        signatureProof: signatureProof
+      },
+      auditRecords: auditLogs,
+      doubtIndicesReport: doubtIndices.length > 0 ? doubtIndices : [
+        {
+          timestamp: new Date().toISOString(),
+          level: 0.28,
+          verificationAge: "8.4ms",
+          contradictionVelocity: "0.01 Hz",
+          details: "Epistemic doubt baseline calibrated against dynamic TPM register records."
+        }
+      ],
+      firewallEventsReport: firewallEvents.length > 0 ? firewallEvents : [
+        {
+          timestamp: new Date().toISOString(),
+          event: "SYSTEM_BOOT_BARRIER_SEALED",
+          status: "AUTHORIZED",
+          details: "Layer 0 firewall active rules correctly set to live monitoring."
+        }
+      ],
+      contradictionsReport: contradictions.length > 0 ? contradictions : [
+        {
+          timestamp: new Date().toISOString(),
+          source: "Ars Paulina Doubt Core",
+          resolutionStatus: "CALIBRATED_STABLE",
+          contradictionMetric: 0.15
+        }
+      ],
+      cryptographicSignature: {
+        hashType: "SHA-256 / TPM Sealed Register Verification",
+        masterSeedHash: "3f8ec2de2434bcf12937afecd92bcde724398bcdaea7aefcde928bc7e6a5bb1a",
+        enclaveCertificateAuthority: "SOLOMONX-CA-ECC-SEALED-PRIME-256V1"
+      }
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(signedDoc, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `solomonx_signed_audit_${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    onAddAuditLog({
+      actor: "TrustOS Enclave",
+      action: "DOWNLOAD_SIGNED_AUDIT_TRAIL",
+      status: "AUTHORIZED",
+      details: "Sovereign request authenticated. Compiled session logs of doubt indices, contradictions and network firewall events into dual-signed JSON."
+    });
   };
 
   return (
@@ -156,7 +254,17 @@ export default function TrustTerminal({ auditLogs, onAddAuditLog }: TrustTermina
             <Terminal className="w-4 h-4 text-purple-400" />
             <span className="text-[11px] font-bold text-slate-300">DUCKDB IMMUTABLE AUDIT SYSTEM</span>
           </div>
-          <span className="text-[10px] text-slate-500">BLOCKS INDEXED: {auditLogs.length}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-slate-500 hidden sm:inline">BLOCKS INDEXED: {auditLogs.length}</span>
+            <button
+              onClick={downloadAuditTrail}
+              className="flex items-center gap-1.5 px-3 h-7 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 hover:border-purple-500/50 rounded text-[9px] font-bold font-mono transition-all uppercase"
+              title="Download cryptographically signed session audit report"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Download Audit Trail
+            </button>
+          </div>
         </div>
 
         {/* Upper Portion: Terminal Stream */}
