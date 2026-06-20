@@ -717,16 +717,16 @@ export default function App() {
           ) : wsStatus === 'connecting' ? (
             <div className="hidden lg:flex items-center gap-1.5 bg-blue-950/40 border border-blue-500/20 text-blue-400 px-3 h-8 rounded-full animate-fadeIn animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              <span>CONNECTING COGNITIVE SYNAPSE...</span>
+              <span className="uppercase">Connecting...</span>
             </div>
           ) : (
             <div 
-              className="hidden lg:flex items-center gap-1.5 bg-amber-950/20 border border-amber-500/35 text-amber-400 px-3 h-8 rounded-full border-dashed animate-fadeIn cursor-pointer hover:bg-amber-950/35 transition-all" 
+              className="hidden lg:flex items-center gap-1.5 bg-red-950/20 border border-red-500/35 text-red-400 px-3 h-8 rounded-full border-dashed animate-fadeIn cursor-pointer hover:bg-red-950/35 transition-all" 
               onClick={handleManualReconnect}
               title="Awaiting dynamic local loop web socket on port 8765. Click to force manual link."
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              <span>MOCK / AWAITING COGNITIVE WS (PORT 8765)</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="uppercase">{wsNextRetrySeconds > 2 ? "Link Failed" : `Reattempting in ${wsNextRetrySeconds}s`}</span>
             </div>
           )}
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full">
