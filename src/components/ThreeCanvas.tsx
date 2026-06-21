@@ -470,7 +470,7 @@ const CinematicDoFShader = {
 
 // Programmatically generate a detailed procedural normal map for micro-metallic texture
 function createFineGrainNormalMap(): THREE.CanvasTexture {
-  const size = 512;
+  const size = 1024; // Upgrade resolution for ultra-fidelity micro-grain polishing
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -553,6 +553,133 @@ function createGlowSprite(): THREE.CanvasTexture {
   return texture;
 }
 
+// Programmatically generate a premium anisotropic metallic studio MatCap texture representing reflective chromium coating
+function createMetallicMatCapTexture(): THREE.CanvasTexture {
+  const size = 512; // Upgraded to 512 for high resolution studio reflection mapping
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  const imgData = ctx.createImageData(size, size);
+  const data = imgData.data;
+
+  for (let y = 0; y < size; y++) {
+    const v = (y / (size - 1)) * 2.0 - 1.0;
+    for (let x = 0; x < size; x++) {
+      const u = (x / (size - 1)) * 2.0 - 1.0;
+
+      const distSq = u * u + v * v;
+      const dist = Math.sqrt(distSq);
+      
+      let nx = u;
+      let ny = v;
+      let nz = distSq <= 1.0 ? Math.sqrt(1.0 - distSq) : 0.0;
+
+      if (distSq > 1.0) {
+        nx /= dist;
+        ny /= dist;
+        nz = 0.0;
+      }
+
+      // High-end studio lighting reflections for anisotropic metallic look
+      const lKey = new THREE.Vector3(0.55, 0.75, 0.35).normalize();
+      const lRim = new THREE.Vector3(-0.65, -0.75, 0.15).normalize();
+      const lStripe = new THREE.Vector3(-0.85, 0.15, 0.1).normalize();
+
+      const n = new THREE.Vector3(nx, ny, nz);
+
+      const diffKey = Math.max(0.0, n.dot(lKey));
+      const diffRim = Math.max(0.0, n.dot(lRim));
+      
+      const stripeFactor = Math.pow(Math.abs(n.dot(lStripe)), 15.0);
+
+      const view = new THREE.Vector3(0, 0, 1);
+      const rKey = lKey.clone().multiplyScalar(-1).reflect(n);
+      const specKey = Math.pow(Math.max(0.0, rKey.dot(view)), 54.0);
+
+      // Silver-platinum core metallizer
+      const ambientMetal = new THREE.Color(0x0e1014);
+      const keyMetal = new THREE.Color(0xdde3ec); 
+      const rimMetal = new THREE.Color(0x404554); 
+      const highlightMetal = new THREE.Color(0xffffff);
+
+      const col = new THREE.Color();
+      col.copy(ambientMetal);
+      col.lerp(keyMetal, diffKey * 0.78);
+
+      const rimAdd = new THREE.Color().copy(rimMetal).multiplyScalar(diffRim * 0.45);
+      col.add(rimAdd);
+
+      const specAdd = new THREE.Color().copy(highlightMetal).multiplyScalar(specKey * 2.8 + stripeFactor * 1.6);
+      col.add(specAdd);
+
+      // Outer margin falloff vignette
+      if (dist > 0.94) {
+        const edge = Math.max(0, Math.min(1, (1.0 - dist) / 0.06));
+        col.multiplyScalar(edge);
+      }
+
+      const idx = (y * size + x) * 4;
+      data[idx] = Math.round(col.r * 255);
+      data[idx + 1] = Math.round(col.g * 255);
+      data[idx + 2] = Math.round(col.b * 255);
+      data[idx + 3] = distSq <= 1.0 ? 255 : 0;
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  return texture;
+}
+
+// Programmatically generate a detailed procedural Damascus steel metal mapping (Red=AO, Green=Roughness, Blue=Metallicness)
+function createMetallicRoughnessTexture(): THREE.CanvasTexture {
+  const size = 1024; // Upgraded to 1024 for perfectly smooth wave patterns and brushed noise details
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  const imgData = ctx.createImageData(size, size);
+  const data = imgData.data;
+
+  for (let y = 0; y < size; y++) {
+    const ny = y / size;
+    for (let x = 0; x < size; x++) {
+      const nx = x / size;
+
+      // Elegant high-resolution Damascus steel wavy bands
+      const angle = nx * Math.PI * 4.0;
+      const wave = Math.sin(angle * 3.5 + Math.cos(ny * Math.PI * 7.0) * 4.5) * 0.5 + 0.5;
+      
+      // Extremely fine brushed lines
+      const brushNoise = (Math.random() - 0.5) * 0.12;
+      
+      const ao = 0.85 + 0.15 * wave;
+      const roughness = 0.1 + 0.22 * (1.0 - wave) + Math.abs(brushNoise);
+      const metallic = 0.92 - 0.12 * wave;
+
+      const idx = (y * size + x) * 4;
+      data[idx] = Math.round(ao * 255);                 // R: Ambient Occlusion
+      data[idx + 1] = Math.round(roughness * 255);         // G: Roughness
+      data[idx + 2] = Math.round(metallic * 255);          // B: Metallicness
+      data[idx + 3] = 255;                                 // A
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2, 1);
+  return texture;
+}
+
 const ringVertShader = `
   uniform float uTime;
   uniform float uReputationScore;
@@ -595,6 +722,8 @@ const ringFragShader = `
   uniform float uPulseIntensity;
   uniform float uDoFBlur;
   uniform vec3 uAccentColor;
+  uniform sampler2D uMatCap;
+  uniform sampler2D uMetallicRoughness;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -646,31 +775,96 @@ const ringFragShader = `
       perturbedNormal = mix(perturbedNormal, N, uDoFBlur * 0.85);
     }
 
+    // Dynamic metallic roughness mapping representing Damascus procedural metal steel properties
+    vec3 metallicRoughness = texture2D(uMetallicRoughness, vUv * vec2(2.0, 1.0)).rgb;
+    float ao = metallicRoughness.r;
+    float roughness = mix(0.08, 0.42, metallicRoughness.g);
+    float metallic = metallicRoughness.b * (0.85 + 0.15 * uHoverIntensity);
+
+    // Matcap UV coordinate from view-space perturbedNormal
+    vec2 uvMatCap = perturbedNormal.xy * 0.5 + 0.5;
+    vec3 matcapReflection = texture2D(uMatCap, uvMatCap).rgb;
+
     vec3 lightDir1 = normalize(vec3(0.0, 20.0, 50.0) + vViewPosition);
     vec3 lightDir2 = normalize(vec3(-60.0, -30.0, -50.0) + vViewPosition);
 
-    vec3 ambient = vec3(0.12, 0.09, 0.22) * uColor;
+    // Highly refined physical base color (metallized coating mixed with procedural matcap reflection)
+    vec3 alloyColor = mix(uColor, vec3(1.0, 0.85, 0.45), 0.3); // golden alloy component
+    vec3 baseColor = mix(alloyColor, alloyColor * matcapReflection * 2.0, metallic * 0.7);
+    vec3 ambient = vec3(0.06, 0.05, 0.12) * baseColor * ao;
 
     float diff1 = max(dot(perturbedNormal, lightDir1), 0.0);
     float diff2 = max(dot(perturbedNormal, lightDir2), 0.0);
     
     float intensityFactor = mix(1.0, 0.35, uDoFBlur);
-    vec3 diffuse1 = diff1 * vec3(1.0, 0.85, 0.6) * uColor * 1.6 * intensityFactor;
-    vec3 diffuse2 = diff2 * vec3(0.5, 0.45, 1.0) * uColor * 1.1 * intensityFactor;
+    vec3 diffuse1 = diff1 * vec3(1.0, 0.88, 0.7) * baseColor * 1.8 * intensityFactor;
+    vec3 diffuse2 = diff2 * vec3(0.4, 0.5, 0.9) * baseColor * 1.1 * intensityFactor;
 
+    // Dual-Lobe metallic specular highlight (broad satin shimmer + sharp lacquer gloss)
     vec3 halfDir1 = normalize(lightDir1 + V);
-    float specPower = mix(32.0, 4.0, uDoFBlur);
-    float spec1 = pow(max(dot(perturbedNormal, halfDir1), 0.0), specPower);
-    vec3 specular1 = vec3(1.0, 1.0, 1.0) * spec1 * mix(0.6 + 0.4 * uHoverIntensity, 0.01, uDoFBlur);
+    float shininessBroad = mix(32.0, 8.0, roughness);
+    float shininessSharp = mix(240.0, 32.0, roughness);
+    float specBroad = pow(max(dot(perturbedNormal, halfDir1), 0.0), mix(shininessBroad, 4.0, uDoFBlur));
+    float specSharp = pow(max(dot(perturbedNormal, halfDir1), 0.0), mix(shininessSharp, 16.0, uDoFBlur));
+    
+    vec3 specular1 = vec3(1.0, 0.95, 0.82) * (specBroad * 0.35 + specSharp * 2.8) * mix(0.7 + 0.5 * uHoverIntensity, 0.01, uDoFBlur);
 
+    // Procedural Cosmic / Celestial Reflection Mapping
+    vec3 R = reflect(-V, perturbedNormal);
+    vec3 spaceR = R;
+    float waveX = sin(spaceR.x * 4.0 + uTime * 0.08) * 0.5 + 0.5;
+    float waveY = cos(spaceR.y * 3.5 - uTime * 0.12) * 0.5 + 0.5;
+    float waveZ = sin(spaceR.z * 5.0 + uTime * 0.15) * 0.5 + 0.5;
+    
+    // Ambient cosmic reflection combined with agent's individual accent colors
+    vec3 envReflection = (vec3(0.08, 0.05, 0.22) * waveX + vec3(0.18, 0.26, 0.75) * waveY + uAccentColor * waveZ) * 1.3;
+    
+    // Fresnel Thin-Film Iridescent Shading (shifts colors on grazing angles like luxurious obsidian/pearl)
+    float cosTheta = max(0.0, dot(perturbedNormal, V));
+    float fresnel = pow(1.0 - cosTheta, 3.8);
+    vec3 iridescentSpectrum = vec3(
+      0.5 + 0.5 * sin(fresnel * 4.5 + uTime * 0.3),
+      0.4 + 0.6 * sin(fresnel * 4.5 + uTime * 0.25 + 2.09),
+      0.6 + 0.4 * sin(fresnel * 4.5 + uTime * 0.2 + 4.18)
+    );
+    
+    // Blend environmental reflection and iridescent coating via Fresnel factor
+    vec3 coatingReflection = mix(envReflection * 0.3, envReflection * 1.5 + iridescentSpectrum * uAccentColor * 0.8, fresnel);
+    
+    // Emissive glowing patterns (e.g. glowing digital circuit or gold runic engravings)
     float activePulse = uPulseIntensity * (0.9 + 0.2 * sin(uTime * 3.5));
     float finalEmissiveIntensity = uEmissiveIntensity * activePulse * mix(1.1 + 1.3 * uHoverIntensity, 0.15, uDoFBlur);
-    vec3 emissive = uEmissive * finalEmissiveIntensity;
+    
+    // Procedural runic engraving inlay glow with screen-space hardware anti-aliasing to eliminate pixelation
+    float runeNoise1 = sin(vUv.x * 48.0) * cos(vUv.y * 8.0 + uTime * 0.5);
+    float val1 = fwidth(runeNoise1);
+    float runeInlay = smoothstep(0.965 - val1 * 1.5, 0.965 + val1 * 1.5, runeNoise1);
+    
+    float runeNoise2 = cos(vUv.y * 14.0 + vUv.x * 12.0);
+    float val2 = fwidth(runeNoise2);
+    runeInlay += smoothstep(0.982 - val2 * 1.5, 0.982 + val2 * 1.5, runeNoise2);
+    
+    vec3 runesEmissive = uAccentColor * min(runeInlay, 2.0) * 1.8 * finalEmissiveIntensity;
+    
+    vec3 baseEmissive = uEmissive * finalEmissiveIntensity;
+    vec3 emissive = mix(baseEmissive, baseEmissive * 1.5 + runesEmissive, 0.6 + 0.4 * uHoverIntensity);
 
-    float sparkle = step(0.965, sin(vUv.x * 400.0 + uTime * 4.5) * cos(vUv.y * 150.0 - uTime * 2.0));
-    vec3 sparkles = vec3(1.0, 0.95, 0.7) * sparkle * (0.2 + 0.8 * uHoverIntensity) * (1.0 - uDoFBlur);
+    // Micro-sparkles configuration with screen-space hardware anti-aliasing to prevent jagged edges on closeups
+    float sparkleNoise = sin(vUv.x * 600.0 + uTime * 5.5) * cos(vUv.y * 220.0 - uTime * 3.0);
+    float valSparkle = fwidth(sparkleNoise);
+    float sparkle = smoothstep(0.975 - valSparkle * 1.5, 0.975 + valSparkle * 1.5, sparkleNoise);
+    vec3 sparkles = vec3(1.0, 0.98, 0.85) * sparkle * (0.35 + 0.85 * uHoverIntensity) * (1.0 - uDoFBlur);
 
-    vec3 finalCol = ambient * mix(1.0, 0.3, uDoFBlur) + diffuse1 + diffuse2 + specular1 + emissive + sparkles;
+    // Blend standard diffuse with metallic representation
+    vec3 finalDiffuse = mix(diffuse1 + diffuse2, vec3(0.0), metallic);
+    vec3 finalSpecular = mix(specular1, specular1 * 2.0 + matcapReflection * 1.2, metallic);
+
+    // Assembly of physical layers (Base Diffuse + Ambient + Dual spec + Glossy coating reflections + Emissive patterns + Sparkles)
+    vec3 finalCol = (ambient * mix(1.0, 0.35, uDoFBlur) + finalDiffuse) * (1.0 - fresnel * 0.4) 
+                  + finalSpecular 
+                  + coatingReflection * mix(0.9 + uHoverIntensity * 0.4, 0.05, uDoFBlur) 
+                  + emissive 
+                  + sparkles;
 
     gl_FragColor = vec4(finalCol, mix(1.0, 0.45, uDoFBlur));
   }
@@ -707,6 +901,11 @@ export default function ThreeCanvas({
   const hudTextStatusRef = useRef<HTMLSpanElement>(null);
   const hudTextNameRef = useRef<HTMLSpanElement>(null);
   const hudTextMomentumRef = useRef<HTMLSpanElement>(null);
+  
+  // Tooltip references
+  const hoverTooltipRef = useRef<HTMLDivElement>(null);
+  const hoverTextRef = useRef<HTMLSpanElement>(null);
+
 
   // Maintain immediate reactive refs for frame iterations
   const agentsRef = useRef<AgentSpec[]>(agents);
@@ -890,9 +1089,27 @@ export default function ThreeCanvas({
 
     const normalMapTexture = createFineGrainNormalMap();
     const glowSpriteTexture = createGlowSprite();
+    const matCapTexture = createMetallicMatCapTexture();
+    const metallicRoughnessTexture = createMetallicRoughnessTexture();
 
-    // ─── PART 3B: EFFECT COMPOSER AND BLOOM POST-PROCESSING ───
-    const composer = new EffectComposer(renderer);
+    // Maximize anisotropic filtering for pristine textures at steep camera angles
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    [normalMapTexture, matCapTexture, metallicRoughnessTexture].forEach((tex) => {
+      tex.anisotropy = maxAnisotropy;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
+    });
+
+    // ─── PART 3B: EFFECT COMPOSER AND BLOOM POST-PROCESSING WITH HARDWARE MSAA ───
+    const composeTarget = new THREE.WebGLRenderTarget(container.clientWidth, container.clientHeight, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat,
+      type: THREE.HalfFloatType, // Pristine 16-bit color depth to eliminate banding in bloom/nebulas
+      samples: 8 // Hardware MSAA for WebGL2 post-processing! Extreme high-quality anti-aliasing!
+    });
+    const composer = new EffectComposer(renderer, composeTarget);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 4.0));
     composer.renderToScreen = true;
 
@@ -1060,15 +1277,19 @@ export default function ThreeCanvas({
     scene.add(sigilGroup);
 
     // 6A. Core Sphere
-    const coreGeo = new THREE.SphereGeometry(6, 128, 128); // Elevated subdivision density
-    const coreMat = new THREE.MeshStandardMaterial({
+    const coreGeo = new THREE.SphereGeometry(6, 256, 256); // Pristine high subdivision density
+    const coreMat = new THREE.MeshPhysicalMaterial({
       color: 0xff9900,
       emissive: 0xff9900,
-      emissiveIntensity: 1.5,
-      roughness: 0.2,
-      metalness: 0.8,
+      emissiveIntensity: 1.8,
+      roughness: 0.1,
+      metalness: 0.92,
+      clearcoat: 1.0,          // Highly glossy outer coat
+      clearcoatRoughness: 0.02,
       normalMap: normalMapTexture,
-      normalScale: new THREE.Vector2(0.15, 0.15)
+      normalScale: new THREE.Vector2(0.2, 0.2),
+      roughnessMap: metallicRoughnessTexture,
+      metalnessMap: metallicRoughnessTexture
     });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     sigilGroup.add(coreMesh);
@@ -1079,15 +1300,19 @@ export default function ThreeCanvas({
     const ringColors = [0xffd070, 0xc9933a, 0x7c4df3];
 
     ringRadii.forEach((rad, idx) => {
-      const geo = new THREE.TorusGeometry(rad, 0.45, 64, 300); // Super-sampled subdivision facets
-      const mat = new THREE.MeshStandardMaterial({
+      const geo = new THREE.TorusGeometry(rad, 0.46, 128, 512); // Upgraded radial and tubular subdivisions
+      const mat = new THREE.MeshPhysicalMaterial({
         color: ringColors[idx],
         emissive: ringColors[idx],
-        emissiveIntensity: 0.4,
-        roughness: 0.15,
-        metalness: 0.9,
+        emissiveIntensity: 0.8,
+        roughness: 0.08,
+        metalness: 0.96,
+        clearcoat: 1.0,        // Clear protective glossy glaze
+        clearcoatRoughness: 0.02,
         normalMap: normalMapTexture,
-        normalScale: new THREE.Vector2(0.22, 0.22) // Subtle normal mapping bumps
+        normalScale: new THREE.Vector2(0.25, 0.25),
+        roughnessMap: metallicRoughnessTexture,
+        metalnessMap: metallicRoughnessTexture
       });
       const ring = new THREE.Mesh(geo, mat);
       
@@ -1147,8 +1372,8 @@ export default function ThreeCanvas({
         angle
       );
 
-      // Create Torus Band with hyper-resolution subdivisions (128 x 512)
-      const bandGeo = new THREE.TorusGeometry(8, 1.25, 128, 512);
+      // Create Torus Band with hyper-resolution subdivisions (256 x 1024)
+      const bandGeo = new THREE.TorusGeometry(8, 1.25, 256, 1024);
       const bandMat = new THREE.ShaderMaterial({
         vertexShader: ringVertShader,
         fragmentShader: ringFragShader,
@@ -1158,6 +1383,8 @@ export default function ThreeCanvas({
           uEmissiveIntensity: { value: 0.65 },
           uNormalMap: { value: normalMapTexture },
           uNormalScale: { value: new THREE.Vector2(0.28, 0.28) },
+          uMatCap: { value: matCapTexture },
+          uMetallicRoughness: { value: metallicRoughnessTexture },
           uTime: { value: 0.0 },
           uHoverIntensity: { value: 0.0 },
           uPulseIntensity: { value: 1.0 },
@@ -1172,7 +1399,7 @@ export default function ThreeCanvas({
       g.add(bandMesh);
 
       // Create an additive volumetric atmospheric glow mesh around the torus band (ethereal bloom simulator)
-      const glowGeo = new THREE.TorusGeometry(8, 1.55, 48, 180);
+      const glowGeo = new THREE.TorusGeometry(8, 1.55, 128, 512);
       const glowMat = new THREE.MeshBasicMaterial({
         color: spec.bandColor,
         transparent: true,
@@ -1183,14 +1410,18 @@ export default function ThreeCanvas({
       const glowMesh = new THREE.Mesh(glowGeo, glowMat);
       g.add(glowMesh);
 
-      // Create Stone details with high segment density
-      const stoneGeo = new THREE.SphereGeometry(1.6, 48, 48);
-      const stoneMat = new THREE.MeshStandardMaterial({
+      // Create Stone details with high segment density and physically simulated gemstone properties
+      const stoneGeo = new THREE.SphereGeometry(1.6, 96, 96);
+      const stoneMat = new THREE.MeshPhysicalMaterial({
         color: spec.stoneColor,
         emissive: spec.stoneColor,
-        emissiveIntensity: 2.8, // Enhanced emissive glow for intense bloom feeling
-        roughness: 0.1,
-        metalness: 0.3,
+        emissiveIntensity: 3.2, // Enhanced luminous core
+        roughness: 0.05,
+        metalness: 0.1,
+        clearcoat: 1.0,          // Highly reflective outer enamel coat
+        clearcoatRoughness: 0.02,
+        transmission: 0.65,      // Crystal transmission refraction
+        thickness: 0.8,          // Real physical gemstone thickness
         normalMap: normalMapTexture,
         normalScale: new THREE.Vector2(0.12, 0.12)
       });
@@ -1206,10 +1437,14 @@ export default function ThreeCanvas({
 
       // Create distinct decorative nodes based on detailType
       const N = 8;
-      const nodesMat = new THREE.MeshStandardMaterial({
+      const nodesMat = new THREE.MeshPhysicalMaterial({
         color: spec.accentColor,
-        roughness: 0.2,
-        metalness: 0.8,
+        emissive: spec.accentColor,
+        emissiveIntensity: 0.8, // Luminous runic core inside node metal
+        roughness: 0.08,        // Ultra polished finish
+        metalness: 0.95,        // Heavy metal density
+        clearcoat: 0.8,         // Fine lacquer protection glaze
+        clearcoatRoughness: 0.05
       });
 
       for (let i = 0; i < N; i++) {
@@ -1219,11 +1454,11 @@ export default function ThreeCanvas({
         if (spec.detailType === "crystalFacets") {
           nodeGeo = new THREE.OctahedronGeometry(0.8, 0);
         } else if (spec.detailType === "thorns") {
-          nodeGeo = new THREE.ConeGeometry(0.5, 2.0, 6);
+          nodeGeo = new THREE.ConeGeometry(0.5, 2.0, 32);
         } else if (spec.detailType === "segmentedPlates") {
           nodeGeo = new THREE.BoxGeometry(0.4, 1.6, 2.0);
         } else {
-          nodeGeo = new THREE.SphereGeometry(0.6, 8, 8);
+          nodeGeo = new THREE.SphereGeometry(0.6, 32, 32);
         }
 
         const nodeMesh = new THREE.Mesh(nodeGeo, nodesMat);
@@ -1416,7 +1651,7 @@ export default function ThreeCanvas({
           const newPr = physicalRings.find((p) => p.index === hoveredRingIndex);
           if (newPr) {
             gsap.to(newPr.animState, {
-              hoverScale: 1.25,      // Smoothly expand slightly on hover!
+              hoverScale: 1.15,      // Smoothly expand slightly on hover!
               hoverIntensity: 1.0,   // Increase emission power and micro-shimmer sparkles
               duration: 0.45,
               ease: "power2.out",
@@ -2180,6 +2415,34 @@ export default function ThreeCanvas({
           hudRef.current.style.pointerEvents = "none";
         }
       }
+
+      // ─── UPDATE HOVER TOOLTIP ───
+      if (hoveredRingIndex !== -1 && hoveredRingIndex !== targetHUDIndex && physicalRings.length > 0) {
+        const hPr = physicalRings.find((r) => r.index === hoveredRingIndex);
+        if (hPr) {
+          const tempV3 = new THREE.Vector3();
+          tempV3.setFromMatrixPosition(hPr.group.matrixWorld);
+          tempV3.project(camera);
+
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+          const projectedX = (tempV3.x * 0.5 + 0.5) * width;
+          const projectedY = (-(tempV3.y * 0.5) + 0.5) * height;
+
+          if (hoverTooltipRef.current) {
+            hoverTooltipRef.current.style.transform = `translate3d(${projectedX}px, ${projectedY}px, 0)`;
+            hoverTooltipRef.current.style.opacity = "1";
+          }
+          if (hoverTextRef.current) {
+             const ag = agentsRef.current.find((a) => a.index === hoveredRingIndex);
+             hoverTextRef.current.textContent = ag ? ag.name : "AGENT";
+          }
+        }
+      } else {
+        if (hoverTooltipRef.current) {
+          hoverTooltipRef.current.style.opacity = "0";
+        }
+      }
     };
 
     // Pre-warm and compile both scene pipelines on the GPU to completely eliminate initial frame drops
@@ -2316,6 +2579,19 @@ export default function ThreeCanvas({
       </div>
 
       <canvas ref={canvasRef} className="w-full h-full block" />
+
+      {/* Hover Tooltip Overlay */}
+      <div
+        ref={hoverTooltipRef}
+        className="absolute top-0 left-0 z-40 pointer-events-none transition-opacity duration-200"
+        style={{ opacity: 0, transform: "translate3d(0, 0, 0)" }}
+      >
+        <div className="relative -translate-x-1/2 -translate-y-[200%] bg-slate-950/90 backdrop-blur-md border border-orange-500/30 px-3 py-1.5 rounded-lg shadow-xl shadow-black">
+          <span ref={hoverTextRef} className="font-mono text-xs text-orange-400 font-bold tracking-widest whitespace-nowrap">
+            AGENT
+          </span>
+        </div>
+      </div>
 
       {/* Dynamic Projection HUD Overlay */}
       <div 

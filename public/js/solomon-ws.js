@@ -59,6 +59,12 @@
       ws.onopen = function () {
         window.solomonWS.isConnected = true;
         console.log('[solomon-ws] Connected to backend at ' + WS_URL);
+
+        // Update 3D avatar scene to Idle on successful connections
+        if (typeof window.solomonSetAvatarState === 'function') {
+          window.solomonSetAvatarState('idle');
+        }
+
         // Send ephemeral auth handshake immediately after connect.
         (function sendHandshake() {
           try {
@@ -101,6 +107,10 @@
         var event = data.event;
 
         if (event === 'token_stream') {
+          // Pulse the 3D avatar core dynamically with incoming tokens
+          if (typeof window.solomonPulseAvatarToken === 'function') {
+            window.solomonPulseAvatarToken();
+          }
           window.solomonWS.onToken(data.token, data.done === true);
 
         } else if (event === 'status') {
@@ -110,6 +120,12 @@
           } else {
             window.solomonWS.isGenerating = false;
           }
+
+          // Map operational status to visual animation and speed configurations
+          if (typeof window.solomonSetAvatarState === 'function') {
+            window.solomonSetAvatarState(data.state);
+          }
+
           window.solomonWS.onStatus(data.state);
 
         } else if (event === 'ring_config') {
@@ -120,6 +136,11 @@
 
         } else if (event === 'error') {
           console.error('[solomon-ws] Backend error:', data.message);
+          
+          if (typeof window.solomonSetAvatarState === 'function') {
+            window.solomonSetAvatarState('error');
+          }
+
           window.solomonWS.onError(data.message);
         }
       };
@@ -132,6 +153,11 @@
         window.solomonWS.isConnected  = false;
         window.solomonWS.isGenerating = false;
         console.log('[solomon-ws] Connection closed. Reconnecting in ' + (RECONNECT_DELAY / 1000) + 's...');
+
+        // Transition the 3D core avatar to 'offline' state
+        if (typeof window.solomonSetAvatarState === 'function') {
+          window.solomonSetAvatarState('offline');
+        }
 
         // Notify UI so it can show offline state
         window.solomonWS.onStatus('ollama_offline');

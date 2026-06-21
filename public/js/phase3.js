@@ -785,7 +785,7 @@ function hoverRing(idx) {
   const r = rings[idx];
   if (r.isTraveling || r.isAtSigil) return;
   gsap.to(r.group.scale, {
-    x: 1.12, y: 1.12, z: 1.12,
+    x: 1.15, y: 1.15, z: 1.15,
     duration: 0.3,
     ease: 'power2.out',
   });
@@ -797,6 +797,7 @@ function hoverRing(idx) {
     });
   });
   showTooltip(idx);
+  showActiveLabel(r.spec.name);
 }
 
 // 12. HOVER DETECT EXIT
@@ -816,6 +817,12 @@ function unhoverRing(idx) {
     });
   });
   hideTooltip();
+  
+  if (ringAtSigilIndex !== -1) {
+    showActiveLabel(rings[ringAtSigilIndex].spec.name);
+  } else {
+    hideActiveLabel();
+  }
 }
 
 // ⚡ Bolt Optimization: Debounce mousemove event.
@@ -853,12 +860,65 @@ function sendRingToSigil(idx) {
   ringAtSigilIndex = idx;
   const innerHole = r.spec.diameter - r.spec.tubeRadius;
   const targetScale = Math.min(1.4, Math.max(0.6, 50 / innerHole));
-  gsap.to(r.group.position, { x:0, y:0, z:40, duration:1.2, ease:'power2.inOut' });
-  gsap.to(r.group.rotation, { x:0, y:0, duration:1.2, ease:'power2.inOut' });
+
+  // Set the core sigil tint to match the active ring's distinct color signature
+  if (typeof window.solomonSetSigilRingTint === 'function') {
+    const tintColor = r.spec.accentColor || r.spec.bandColor;
+    window.solomonSetSigilRingTint(tintColor, 0.45);
+  }
+
+  // Calculate current drift to start the tween from actual position
+  const phaseX = idx * 1.13;
+  const phaseY = idx * 0.87;
+  const driftStartX = r.spec.homePos.x + Math.sin(p3Time * 0.28 + phaseX) * 10;
+  const driftStartY = r.spec.homePos.y + Math.sin(p3Time * 0.32 + phaseY) * 8;
+  
+  // To avoid GSAP fighting phase3Update, we use a proxy object to tween the position
+  // so we can blend between actual drift and the core (0,0,40)
+  r.travelObj = { progress: 0 };
+  
+  // Ensure all standard materials are transparent so we can tween opacity
+  r.allStdMats.forEach(mat => { mat.transparent = true; });
+
+  gsap.to(r.travelObj, { 
+    progress: 1, 
+    duration: 1.5, 
+    ease: 'power3.inOut',
+    onUpdate: () => {
+      const p = r.travelObj.progress;
+      r.group.position.x = driftStartX * (1 - p) + 0 * p;
+      r.group.position.y = driftStartY * (1 - p) + 0 * p;
+      r.group.position.z = r.spec.homePos.z * (1 - p) + 40 * p;
+      // Fade ring out slightly as it gets near the glowing sigil core
+      const opacityVal = 1 - (p * 0.4); 
+      r.allStdMats.forEach(mat => {
+        mat.opacity = opacityVal;
+      });
+    }
+  });
+  
+  // Spin into place alignment
+  const targetRotX = Math.round(r.group.rotation.x / (Math.PI * 2)) * (Math.PI * 2) + Math.PI * 2;
+  const targetRotY = Math.round(r.group.rotation.y / (Math.PI * 2)) * (Math.PI * 2) + Math.PI * 2;
+  
+  gsap.to(r.group.rotation, { 
+    x: targetRotX, 
+    y: targetRotY, 
+    z: 0,
+    duration: 1.5, 
+    ease: 'power3.inOut' 
+  });
+  
   gsap.to(r.group.scale, {
-    x:targetScale, y:targetScale, z:targetScale,
-    duration:1.2, ease:'power2.inOut',
-    onComplete: () => { r.isTraveling = false; r.isAtSigil = true; showActiveLabel(r.spec.name); }
+    x: targetScale, y: targetScale, z: targetScale,
+    duration: 1.5, 
+    ease: 'back.inOut(1.2)',
+    onComplete: () => { 
+      r.isTraveling = false; 
+      r.isAtSigil = true; 
+      r.group.rotation.set(0, 0, 0); // reset rotation for proper interaction at core
+      showActiveLabel(r.spec.name); 
+    }
   });
 }
 
@@ -888,11 +948,59 @@ function returnRingToOrigin(idx, onReturnComplete) {
   r.isAtSigil = false;
   if (ringAtSigilIndex === idx) ringAtSigilIndex = -1;
   hideActiveLabel();
-  gsap.to(r.group.position, { x:r.spec.homePos.x, y:r.spec.homePos.y, z:r.spec.homePos.z, duration:1.2, ease:'power2.inOut' });
-  gsap.to(r.group.rotation, { x:r.spec.initRot.x, y:r.spec.initRot.y, z:r.spec.initRot.z, duration:1.2, ease:'power2.inOut' });
+
+  // Clear the active ring's color tint from the core sigil, letting it fade back to native gold/orange
+  if (typeof window.solomonClearSigilRingTint === 'function') {
+    window.solomonClearSigilRingTint();
+  }
+
+  r.travelObj = { progress: 0 };
+  const phaseX = idx * 1.13;
+  const phaseY = idx * 0.87;
+
+  gsap.to(r.travelObj, { 
+    progress: 1, 
+    duration: 1.5, 
+    ease: 'power3.inOut',
+    onUpdate: () => {
+      const p = r.travelObj.progress;
+      // Re-evaluate drift dynamically so it seamlessly lands into the moving wave
+      const currentDriftX = Math.sin(p3Time * 0.28 + phaseX) * 10;
+      const currentDriftY = Math.sin(p3Time * 0.32 + phaseY) * 8;
+      r.group.position.x = 0 * (1 - p) + (r.spec.homePos.x + currentDriftX) * p;
+      r.group.position.y = 0 * (1 - p) + (r.spec.homePos.y + currentDriftY) * p;
+      r.group.position.z = 40 * (1 - p) + r.spec.homePos.z * p;
+      // Interpolate opacity back from 0.6 to 1.0 (fade back in)
+      const opacityVal = 0.6 + (p * 0.4);
+      r.allStdMats.forEach(mat => {
+        mat.opacity = opacityVal;
+      });
+    }
+  });
+  
+  // Animate the ring leaving with a graceful spin out (add 2 PI to its target rotation)
+  const targetRotX = Math.round(r.group.rotation.x / (Math.PI * 2)) * (Math.PI * 2) + r.spec.initRot.x + Math.PI * 2;
+  const targetRotY = Math.round(r.group.rotation.y / (Math.PI * 2)) * (Math.PI * 2) + r.spec.initRot.y - Math.PI * 2;
+  const targetRotZ = Math.round(r.group.rotation.z / (Math.PI * 2)) * (Math.PI * 2) + r.spec.initRot.z + Math.PI * 2;
+
+  gsap.to(r.group.rotation, { 
+    x: targetRotX, 
+    y: targetRotY, 
+    z: targetRotZ, 
+    duration: 1.5, 
+    ease: 'power3.inOut' 
+  });
+  
   gsap.to(r.group.scale, {
-    x:1, y:1, z:1, duration:1.2, ease:'power2.inOut',
-    onComplete: () => { r.isTraveling = false; if (onReturnComplete) onReturnComplete(); }
+    x: 1, y: 1, z: 1, 
+    duration: 1.5, 
+    ease: 'back.out(1.2)', // Elastic snap into place
+    onComplete: () => { 
+      r.isTraveling = false; 
+      // Normalize rotation angles to prevent accumulation bloat over many clicks
+      r.group.rotation.set(r.spec.initRot.x, r.spec.initRot.y, r.spec.initRot.z);
+      if (onReturnComplete) onReturnComplete(); 
+    }
   });
 }
 
@@ -934,17 +1042,22 @@ window.addEventListener('click', onMouseClick);
 // 16. PHASE 3 PER-FRAME UPDATE
 let p3Time = 0;
 function phase3Update() {
-  p3Time += 0.01;
+  const dtNorm = window.solomonP2DeltaNorm || 1.0;
+  p3Time += 0.01 * dtNorm;
+  
   rings.forEach((r, idx) => {
-    if (r.isTraveling) { r.group.rotation.z += r.spinDeltaZ * 2.0; return; }
-    if (r.isAtSigil) { r.group.rotation.z += 0.0006; return; }
-    r.group.rotation.x += r.spinDeltaX;
-    r.group.rotation.y += r.spinDeltaY;
-    r.group.rotation.z += r.spinDeltaZ;
+    if (r.isTraveling) return; // Completely let GSAP handle rotation and position during travel
+    if (r.isAtSigil) { r.group.rotation.z += 0.0006 * dtNorm; return; }
+    
+    r.group.rotation.x += r.spinDeltaX * dtNorm;
+    r.group.rotation.y += r.spinDeltaY * dtNorm;
+    r.group.rotation.z += r.spinDeltaZ * dtNorm;
+    
     const phaseX = idx * 1.13;
     const phaseY = idx * 0.87;
     const driftX = Math.sin(p3Time * 0.28 + phaseX) * 10;
     const driftY = Math.sin(p3Time * 0.32 + phaseY) * 8;
+    
     r.group.position.x = r.spec.homePos.x + driftX;
     r.group.position.y = r.spec.homePos.y + driftY;
     r.group.position.z = r.spec.homePos.z;
