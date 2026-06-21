@@ -1449,30 +1449,100 @@ export default function ThreeCanvas({
 
       for (let i = 0; i < N; i++) {
         const nodeAngle = (i / N) * Math.PI * 2;
-        let nodeGeo: THREE.BufferGeometry;
-
-        if (spec.detailType === "crystalFacets") {
-          nodeGeo = new THREE.OctahedronGeometry(0.8, 0);
-        } else if (spec.detailType === "thorns") {
-          nodeGeo = new THREE.ConeGeometry(0.5, 2.0, 32);
-        } else if (spec.detailType === "segmentedPlates") {
-          nodeGeo = new THREE.BoxGeometry(0.4, 1.6, 2.0);
-        } else {
-          nodeGeo = new THREE.SphereGeometry(0.6, 32, 32);
-        }
-
-        const nodeMesh = new THREE.Mesh(nodeGeo, nodesMat);
+        const nodeGroup = new THREE.Group();
         const nodeRad = 8;
-        nodeMesh.position.set(
+        nodeGroup.position.set(
           Math.cos(nodeAngle) * nodeRad,
           Math.sin(nodeAngle) * nodeRad,
           0
         );
-        nodeMesh.rotation.z = nodeAngle;
-        if (spec.detailType === "thorns") {
-          nodeMesh.rotation.x = Math.PI / 2;
+
+        if (spec.detailType === "crystalFacets") {
+          const geo = new THREE.OctahedronGeometry(0.8, 0);
+          const mesh = new THREE.Mesh(geo, nodesMat);
+          nodeGroup.add(mesh);
+        } else if (spec.detailType === "thorns") {
+          const geo = new THREE.ConeGeometry(0.4, 1.8, 32);
+          const mesh = new THREE.Mesh(geo, nodesMat);
+          mesh.rotation.x = Math.PI / 2;
+          nodeGroup.add(mesh);
+        } else if (spec.detailType === "segmentedPlates") {
+          const geo = new THREE.BoxGeometry(0.3, 1.6, 2.0);
+          const mesh = new THREE.Mesh(geo, nodesMat);
+          nodeGroup.add(mesh);
+        } else if (spec.detailType === "crossStruts") {
+          // Cross Struts (Ars Almadel): perpendicular intersecting bars
+          const geo1 = new THREE.BoxGeometry(1.6, 0.28, 0.28);
+          const geo2 = new THREE.BoxGeometry(0.28, 1.6, 0.28);
+          const mesh1 = new THREE.Mesh(geo1, nodesMat);
+          const mesh2 = new THREE.Mesh(geo2, nodesMat);
+          nodeGroup.add(mesh1);
+          nodeGroup.add(mesh2);
+        } else if (spec.detailType === "hexNodes") {
+          // Hex Nodes (Ars Notoria): hexagonal prisms
+          const geo = new THREE.CylinderGeometry(0.6, 0.6, 0.45, 6);
+          const mesh = new THREE.Mesh(geo, nodesMat);
+          mesh.rotation.x = Math.PI / 2;
+          nodeGroup.add(mesh);
+        } else if (spec.detailType === "angularBrackets") {
+          // Angular Brackets (Ars Paulina): chevron / V-shaped support plates
+          const leftGeo = new THREE.BoxGeometry(0.75, 0.22, 0.35);
+          const leftMesh = new THREE.Mesh(leftGeo, nodesMat);
+          leftMesh.position.set(-0.35, 0.15, 0);
+          leftMesh.rotation.z = Math.PI / 4;
+
+          const rightGeo = new THREE.BoxGeometry(0.75, 0.22, 0.35);
+          const rightMesh = new THREE.Mesh(rightGeo, nodesMat);
+          rightMesh.position.set(0.35, 0.15, 0);
+          rightMesh.rotation.z = -Math.PI / 4;
+
+          nodeGroup.add(leftMesh);
+          nodeGroup.add(rightMesh);
+        } else if (spec.detailType === "woundCoils") {
+          // Wound Coils (Ars Goetia): coiled metal loops
+          const coilGeo1 = new THREE.TorusGeometry(0.65, 0.13, 8, 32);
+          const coilGeo2 = new THREE.TorusGeometry(0.48, 0.11, 8, 32);
+          const mesh1 = new THREE.Mesh(coilGeo1, nodesMat);
+          const mesh2 = new THREE.Mesh(coilGeo2, nodesMat);
+          mesh1.position.z = -0.15;
+          mesh2.position.z = 0.15;
+          nodeGroup.add(mesh1);
+          nodeGroup.add(mesh2);
+        } else if (spec.detailType === "ladderRungs") {
+          // Ladder Rungs (Ars Almiras): tangential triple rung sets
+          const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 1.4), nodesMat);
+          const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 1.4), nodesMat);
+          const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 1.4), nodesMat);
+          b1.position.set(-0.45, 0, 0);
+          b2.position.set(0, 0, 0);
+          b3.position.set(0.45, 0, 0);
+          nodeGroup.add(b1);
+          nodeGroup.add(b2);
+          nodeGroup.add(b3);
+        } else if (spec.detailType === "spiralWraps") {
+          // Spiral Wraps (Ars Verum): intricate spiral toroidal knots
+          const geo = new THREE.TorusKnotGeometry(0.55, 0.16, 48, 8, 2, 5);
+          const mesh = new THREE.Mesh(geo, nodesMat);
+          nodeGroup.add(mesh);
+        } else if (spec.detailType === "nestedArcs") {
+          // Nested Arcs (Ars Fulcanelli): nested layered crescents
+          const arc1 = new THREE.TorusGeometry(0.8, 0.11, 8, 24, Math.PI);
+          const arc2 = new THREE.TorusGeometry(0.5, 0.09, 8, 24, Math.PI);
+          const mesh1 = new THREE.Mesh(arc1, nodesMat);
+          const mesh2 = new THREE.Mesh(arc2, nodesMat);
+          mesh1.rotation.z = Math.PI;
+          mesh2.rotation.z = Math.PI;
+          nodeGroup.add(mesh1);
+          nodeGroup.add(mesh2);
+        } else {
+          // Fallback
+          const geo = new THREE.SphereGeometry(0.65, 32, 32);
+          const mesh = new THREE.Mesh(geo, nodesMat);
+          nodeGroup.add(mesh);
         }
-        g.add(nodeMesh);
+
+        nodeGroup.rotation.z = nodeAngle;
+        g.add(nodeGroup);
       }
 
       g.position.copy(homePos);
