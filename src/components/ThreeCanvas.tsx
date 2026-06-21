@@ -878,6 +878,8 @@ interface ThreeCanvasProps {
   bloomIntensity?: number;
   auditLogs?: AuditLog[];
   telemetryData?: TelemetryPoint[];
+  sendingChat?: boolean;
+  isListeningMic?: boolean;
 }
 
 export default function ThreeCanvas({ 
@@ -887,7 +889,9 @@ export default function ThreeCanvas({
   bloomThreshold = 0.22,
   bloomIntensity = 1.5,
   auditLogs = [],
-  telemetryData = []
+  telemetryData = [],
+  sendingChat = false,
+  isListeningMic = false
 }: ThreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -915,6 +919,17 @@ export default function ThreeCanvas({
 
   const bloomThresholdRef = useRef<number>(bloomThreshold);
   const bloomIntensityRef = useRef<number>(bloomIntensity);
+  
+  const sendingChatRef = useRef<boolean>(!!sendingChat);
+  const isListeningMicRef = useRef<boolean>(!!isListeningMic);
+
+  useEffect(() => {
+    sendingChatRef.current = !!sendingChat;
+  }, [sendingChat]);
+
+  useEffect(() => {
+    isListeningMicRef.current = !!isListeningMic;
+  }, [isListeningMic]);
 
   // Sync bloom parameters in the background to avoid re-constructing the WebGL canvas
   useEffect(() => {
@@ -1332,6 +1347,87 @@ export default function ThreeCanvas({
     });
     const icoMesh = new THREE.Mesh(icoGeo, icoMat);
     sigilGroup.add(icoMesh);
+
+    // ─── PART 6D: THE HOLOGRAPHIC COGNITIVE AVATAR ───────────
+    const avatarGroup = new THREE.Group();
+    avatarGroup.position.set(0, 0, 0);
+    // Start collapsed so we only see it when an agent ring is unsealed/selected
+    avatarGroup.scale.setScalar(selectedRingIndex !== -1 ? 1.45 : 0.001);
+    scene.add(avatarGroup);
+
+    // Dynamic wave loop geometry for real-time vocal frequency analyzer line
+    const wavePointsCount = 120;
+    const wavePositions = new Float32Array(wavePointsCount * 3);
+    const waveProgress = new Float32Array(wavePointsCount);
+    for (let i = 0; i < wavePointsCount; i++) {
+      waveProgress[i] = i / wavePointsCount;
+    }
+    const waveGeo = new THREE.BufferGeometry();
+    waveGeo.setAttribute("position", new THREE.BufferAttribute(wavePositions, 3));
+    waveGeo.setAttribute("progress", new THREE.BufferAttribute(waveProgress, 1));
+
+    // Glow line material for the vocal analyzer ribbon
+    const waveMat = new THREE.ShaderMaterial({
+      vertexShader: LineVertShader,
+      fragmentShader: LineFragShader,
+      uniforms: {
+        uTime: { value: 0.0 },
+        uColor: { value: new THREE.Color(0x7c4df3) },
+        uPulseSpeed: { value: 2.0 },
+        uColorIntensity: { value: 2.5 }
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const waveLine = new THREE.LineLoop(waveGeo, waveMat);
+    avatarGroup.add(waveLine);
+
+    // Glowing particle cloud representing the cranial "thought core" (cerebral head shape scan)
+    const avatarCloudCount = 380;
+    const avatarCloudGeo = new THREE.BufferGeometry();
+    const avatarCloudPos = new Float32Array(avatarCloudCount * 3);
+    const avatarCloudSpeeds = new Float32Array(avatarCloudCount);
+    const avatarCloudPhases = new Float32Array(avatarCloudCount);
+
+    for (let i = 0; i < avatarCloudCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      
+      // Make it resemble a cerebral head scan structure (elongated vertically, slightly flatter sides)
+      const r = 4.2 + Math.random() * 0.9;
+      avatarCloudPos[i * 3] = r * Math.sin(phi) * Math.cos(theta) * 0.88; // X axis slightly thinner
+      avatarCloudPos[i * 3 + 1] = r * Math.cos(phi) * 1.38; // Y axis elongated vertically for head profile
+      avatarCloudPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta) * 0.88; // Z axis
+      
+      avatarCloudSpeeds[i] = 0.5 + Math.random() * 1.5;
+      avatarCloudPhases[i] = Math.random() * Math.PI * 2;
+    }
+    
+    avatarCloudGeo.setAttribute("position", new THREE.BufferAttribute(avatarCloudPos, 3));
+    const avatarCloudMat = new THREE.PointsMaterial({
+      color: 0x7c4df3,
+      size: 1.8,
+      map: glowSpriteTexture,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const avatarPointField = new THREE.Points(avatarCloudGeo, avatarCloudMat);
+    avatarGroup.add(avatarPointField);
+
+    // A digital sweeping cursor ring representing real-time biometric scan sweeps
+    const scanRingGeo = new THREE.TorusGeometry(5.2, 0.08, 16, 128);
+    const scanRingMat = new THREE.MeshBasicMaterial({
+      color: 0x7c4df3,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+    });
+    const scanRingMesh = new THREE.Mesh(scanRingGeo, scanRingMat);
+    scanRingMesh.rotation.x = Math.PI / 2;
+    avatarGroup.add(scanRingMesh);
 
     // ─── PART 7: THE 10 RINGS OF SOLOMON ───────────────────
     const physicalRings = [] as {
@@ -1953,6 +2049,7 @@ export default function ThreeCanvas({
     let currentDPRScale = Math.max(window.devicePixelRatio || 1.0, 3840.0 / Math.max(1.0, container.clientWidth));
     let targetDPRScale = currentDPRScale;
     let lastScalingTime = performance.now();
+    let prevActiveIdx = -2;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -2168,6 +2265,115 @@ export default function ThreeCanvas({
       // Pulse core glowing intensity
       const pulseRatio = 1.0 + 0.3 * Math.sin(time * 2.5);
       coreMat.emissiveIntensity = 1.5 * pulseRatio;
+
+      // ─── DYNAMIC HOLOGRAPHIC COGNITIVE AVATAR ANIMATIONS ───
+      // Gently rotate and bob the holographic head representation
+      avatarGroup.rotation.y = time * 0.42;
+      avatarGroup.rotation.x = Math.sin(time * 0.6) * 0.12;
+      avatarGroup.position.y = Math.sin(time * 1.5) * 0.85;
+
+      // Vertical sweeping scanning biometric ring
+      const scanY = Math.sin(time * 2.0) * 5.8;
+      scanRingMesh.position.y = scanY;
+
+      const isSpeaking = sendingChatRef.current;
+      const isListening = isListeningMicRef.current;
+
+      // Get color matches for the unsealed active agent
+      const activeColorHex = activeIdx !== -1 && agents[activeIdx] ? agents[activeIdx].bandColor : 0x7c4df3;
+      const activeColor = new THREE.Color(activeColorHex);
+      
+      waveMat.uniforms.uColor.value.copy(activeColor);
+      avatarCloudMat.color.copy(activeColor);
+      scanRingMat.color.copy(activeColor);
+
+      // Animate speaking vocal soundwave analyzer loop
+      const wavePosAttr = waveGeo.attributes.position as THREE.BufferAttribute;
+      const wavePosArr = wavePosAttr.array as Float32Array;
+
+      for (let i = 0; i < wavePointsCount; i++) {
+        const phi = (i / wavePointsCount) * Math.PI * 2;
+        let pRadius = 7.2; // Base vocal loop radius
+
+        if (isSpeaking) {
+          // Dynamic holographic speech waveforms: multi-sinusoidal harmonic spikes
+          pRadius += Math.sin(phi * 5.0 - time * 24.0) * 1.6 * Math.sin(time * 4.0)
+                   + Math.cos(phi * 11.0 + time * 38.0) * 0.65;
+        } else if (isListening) {
+          // Steady listening prompt frequency visualizer (user audio feedback representation)
+          pRadius += Math.sin(phi * 4.0 - time * 14.0) * 0.52 * (0.8 + 0.2 * Math.sin(time * 5.0));
+        } else {
+          // Calm subconscious cognitive breathing harmonics
+          pRadius += Math.sin(phi * 2.5 - time * 2.2) * 0.22;
+        }
+
+        let zHeight = 0;
+        if (isSpeaking) {
+          zHeight = Math.cos(phi * 4.0 + time * 18.0) * 1.2;
+        } else if (isListening) {
+          zHeight = Math.sin(phi * 3.0 + time * 8.0) * 0.42;
+        }
+
+        wavePosArr[i * 3] = Math.cos(phi) * pRadius;
+        wavePosArr[i * 3 + 1] = Math.sin(phi) * pRadius;
+        wavePosArr[i * 3 + 2] = zHeight;
+      }
+      wavePosAttr.needsUpdate = true;
+
+      // ─── HOLLYWOOD-CLASS SCI-FI CINEMATIC TRANSITIONS ───
+      if (activeIdx !== prevActiveIdx) {
+        prevActiveIdx = activeIdx;
+
+        if (activeIdx !== -1) {
+          // 1. Bloom flare explosion: spike bloom pass to represent heavy unsealing power coupling
+          bloomIntensityRef.current = 4.8;
+          gsap.killTweensOf(bloomIntensityRef);
+          gsap.to(bloomIntensityRef, {
+            current: bloomIntensity,
+            duration: 1.4,
+            ease: "power2.out"
+          });
+
+          // 2. Recoil Camera Zoom: rapid zoom push, decaying smoothly with high elastic recoil
+          camera.position.z = 95.0 - 25.0; // zoom surge impact
+          gsap.killTweensOf(camera.position);
+          gsap.to(camera.position, {
+            z: 95.0,
+            duration: 1.6,
+            ease: "elastic.out(0.85, 0.55)"
+          });
+
+          // 3. Shockwave sparks surge: Flare particles size temporarily
+          sparksMat.size = 14.0;
+          gsap.killTweensOf(sparksMat);
+          gsap.to(sparksMat, {
+            size: 3.5,
+            duration: 1.3,
+            ease: "power2.out"
+          });
+
+          // 4. Gyros rapid rotation spin spike!
+          gyroRings.forEach((ring, index) => {
+            gsap.killTweensOf(ring.rotation);
+            gsap.fromTo(ring.rotation, 
+              { z: ring.rotation.z },
+              { z: ring.rotation.z + Math.PI * (index % 2 === 0 ? 4 : -4), duration: 2.2, ease: "power3.out" }
+            );
+          });
+
+          // 5. Coordinated scales: contract 3D core sphere and surge the holographic avatar
+          gsap.killTweensOf(coreMesh.scale);
+          gsap.killTweensOf(avatarGroup.scale);
+          gsap.to(coreMesh.scale, { x: 0.35, y: 0.35, z: 0.35, duration: 0.8, ease: "power3.out" });
+          gsap.to(avatarGroup.scale, { x: 1.45, y: 1.45, z: 1.45, duration: 1.6, ease: "elastic.out(1.0, 0.42)" });
+        } else {
+          // Dissolving active focus: pull back 3D core sphere to 1.0 and minimize avatar
+          gsap.killTweensOf(coreMesh.scale);
+          gsap.killTweensOf(avatarGroup.scale);
+          gsap.to(coreMesh.scale, { x: 1.0, y: 1.0, z: 1.0, duration: 0.9, ease: "power2.out" });
+          gsap.to(avatarGroup.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.7, ease: "power2.out" });
+        }
+      }
 
       const isAgentActive = activeIdx !== -1;
 

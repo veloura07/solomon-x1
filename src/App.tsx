@@ -926,6 +926,8 @@ export default function App() {
                       bloomIntensity={bloomIntensity}
                       auditLogs={auditLogs}
                       telemetryData={telemetryData}
+                      sendingChat={sendingChat}
+                      isListeningMic={isListeningMic}
                     />
                   </div>
 
