@@ -348,8 +348,8 @@ const SSAOShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     uResolution: { value: new THREE.Vector2(1, 1) },
-    uAOStrength: { value: 1.25 },
-    uAORadius: { value: 3.5 },
+    uAOStrength: { value: 1.5 },
+    uAORadius: { value: 4.5 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -371,32 +371,42 @@ const SSAOShader = {
 
     void main() {
       vec4 sceneCol = texture2D(tDiffuse, vUv);
+      float currentLuma = dot(sceneCol.rgb, vec3(0.299, 0.587, 0.114));
       
       float ao = 0.0;
       float totalWeight = 0.0;
-      const int SAMPLE_COUNT = 8;
+      const int SAMPLE_COUNT = 16;
       
       float stepSize = uAORadius / max(uResolution.x, uResolution.y);
-      float currentLuma = dot(sceneCol.rgb, vec3(0.299, 0.587, 0.114));
       
       for (int i = 0; i < SAMPLE_COUNT; i++) {
-        float angle = (float(i) / float(SAMPLE_COUNT)) * 6.28318;
-        float noiseFactor = 0.5 + 0.5 * rand(vUv * 75.0 + float(i));
+        float angle = (float(i) / float(SAMPLE_COUNT)) * 6.2831853;
+        float noiseFactor = 0.4 + 0.6 * rand(vUv * 123.456 + float(i));
         vec2 offset = vec2(cos(angle), sin(angle)) * stepSize * noiseFactor;
         
         vec4 sampleCol = texture2D(tDiffuse, vUv + offset);
         float sampleLuma = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
         
-        float differential = abs(currentLuma - sampleLuma);
-        float weight = 1.0 - smoothstep(0.01, 1.0, float(i) / float(SAMPLE_COUNT));
+        // If neighbor is brighter than center, center is in a contact/shadow crevice
+        float diff = max(0.0, sampleLuma - currentLuma);
         
-        ao += differential * weight;
+        // Soft falloff based on sample distance
+        float distFactor = 1.0 - (float(i) / float(SAMPLE_COUNT));
+        float weight = distFactor * distFactor;
+        
+        ao += diff * weight;
         totalWeight += weight;
       }
       
+      // Normalize and apply strength
       ao = (ao / max(totalWeight, 0.001)) * uAOStrength;
-      float factor = clamp(1.0 - ao, 0.45, 1.0);
-      gl_FragColor = vec4(sceneCol.rgb * factor, sceneCol.a);
+      
+      // Prevent shadowing pure black cosmic space and preserve bright self-emissive highlights
+      float highlightMask = 1.0 - smoothstep(0.65, 0.95, currentLuma);
+      float emptySpaceMask = smoothstep(0.03, 0.15, currentLuma);
+      float shadowFactor = clamp(1.0 - ao * highlightMask * emptySpaceMask, 0.38, 1.0);
+      
+      gl_FragColor = vec4(sceneCol.rgb * shadowFactor, sceneCol.a);
     }
   `
 };
