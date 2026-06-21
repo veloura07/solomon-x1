@@ -38,7 +38,7 @@ export default function SovereignConsole({
   onSetSelectedRingIndex,
   onUpdateAgentPool
 }: SovereignConsoleProps) {
-  const [activeTab, setActiveTab] = useState<"phase1" | "phase2" | "phase3">("phase1");
+  const [activeTab, setActiveTab] = useState<"phase1" | "phase2" | "phase3" | "phase4">("phase1");
   const [logs, setLogs] = useState<string[]>([]);
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -65,6 +65,33 @@ export default function SovereignConsole({
   const [sensitivityLevel, setSensitivityLevel] = useState("Medium");
   const [lockdownPasskey, setLockdownPasskey] = useState("SOLOMON-IX");
   const [shardsCount, setShardsCount] = useState(128);
+
+  // Phase 4: Neural Ten-Ring Calibration States
+  const [selectedCalibRing, setSelectedCalibRing] = useState<number>(2); // Default to Ring II (Ars Paulina)
+  const [calibIntensity, setCalibIntensity] = useState<Record<number, number>>({
+    0: 75, // Ars Almadel
+    1: 80, // Ars Notoria
+    2: 65, // Ars Paulina
+    3: 90, // Ars Goetia
+    4: 70, // Ars Theurgia
+    5: 15, // Ars Almiras
+    6: 3,  // Ars Verum
+    7: 85, // Ars Ephesia
+    8: 30, // Ars Fulcanelli
+    9: 50  // Ars Regalis
+  });
+  const [calibSubModes, setCalibSubModes] = useState<Record<number, string>>({
+    0: "ENCLAVE_L0_BLOCK",
+    1: "HYPER_REINDEX",
+    2: "QUANTUM_ANTIPATHY",
+    3: "BOX_ISOLATION_MAX",
+    4: "LORENTZ_GRAVITATION",
+    5: "I_O_BURST_BUFFER",
+    6: "BIOMETRIC_MFA_L5",
+    7: "DREAM_COMPACT_D9",
+    8: "TEMPORAL_CLOCK_PARITY",
+    9: "CRE_EQUILIBRIUM_V3"
+  });
 
   // Add line to terminal logs helper
   const addLog = (msg: string) => {
@@ -235,6 +262,212 @@ export default function SovereignConsole({
     );
   };
 
+  // Option D (Phase 4) Execution Handler for Ten-Ring Calibration
+  const handleExecutePhase4 = () => {
+    if (runningAction) return;
+
+    const selectedRingObj = agents[selectedCalibRing];
+    if (!selectedRingObj) return;
+
+    const intensity = calibIntensity[selectedCalibRing];
+    const subMode = calibSubModes[selectedCalibRing];
+
+    // Define custom sequence logs based on the active ring
+    let steps: string[] = [];
+    let horizon: MemoryItem["horizon"] = "L5_Semantic";
+    let summary = "";
+    let detailedContent = "";
+    let category = "Information";
+    let systemInstructionPrompt = "";
+    let systemText = "";
+
+    switch (selectedCalibRing) {
+      case 0:
+        steps = [
+          `Targeting Ring 0: [${selectedRingObj.name}]...`,
+          `Unlocking local Sovereign firewall ports...`,
+          `Scanning and sealing unauthorized telemetry channels...`,
+          `Calibrating Sentinel Defense strictness value to ${intensity}%...`,
+          `Sovereign firewall bounds aligned correctly with [${subMode}]...`
+        ];
+        horizon = "L1_Sensory";
+        summary = `${selectedRingObj.name} Firewall strictness Calibrated`;
+        detailedContent = `Reconfigured local firewall strictness to ${intensity}% under Mode: ${subMode}. Swept loopback channels and enforced secure enclaves. Zero unsealed ports detected.`;
+        category = "Invariants";
+        systemText = `Firewall strictness updated to ${intensity}%. Automated rulesets bound to unsealed ${subMode} registries are now enforcing perimeter security. Buffer integrity: 100%. Ready for directives.`;
+        systemInstructionPrompt = `You are Ars Almadel, the Firewall Architect of Solomon X. Detail to the commander that you have unsealed your firewall calibrator at strictness level ${intensity}% with mode ${subMode}. Explain how this shields the system core against intrusion.`;
+        break;
+      case 1:
+        steps = [
+          `Targeting Ring 1: [${selectedRingObj.name}]...`,
+          `Establishing connection to 9-Horizon Memory Indexer...`,
+          `Aggregating unstable L2 conversational fragments...`,
+          `Compacting sensory registries into semantic L5 clusters...`,
+          `Memory compression threshold established at ${intensity}% [${subMode}]...`
+        ];
+        horizon = "L5_Semantic";
+        summary = `${selectedRingObj.name} Memory index parameters adjusted`;
+        detailedContent = `Calibrated index compaction threshold to ${intensity}% under indexing mode: ${subMode}. Processed active memory boards and successfully committed 14.8% storage savings with zero data loss.`;
+        category = "Information";
+        systemText = `System index tables successfully optimized at ${intensity}% compression ratio under ${subMode} guidelines. Long-term memory retrieval query performance accelerated by 185ms. Ready for recall tasks.`;
+        systemInstructionPrompt = `You are Ars Notoria, the Memory Scribe of Solomon X. Tell the user how you updated memory index compression thresholds to ${intensity}% under ${subMode} rules, and how this prevents cognitive fragmentation.`;
+        break;
+      case 2:
+        steps = [
+          `Targeting Ring 2: [${selectedRingObj.name}]...`,
+          `Init of Epistemic Doubt Engine uncertainty nodes...`,
+          `Configuring hypothetical contradiction velocity constants...`,
+          `Unsealing bias assessment checks on active belief lists...`,
+          `Uncertainty model skepticism parameters locked at ${intensity}% [${subMode}]...`
+        ];
+        horizon = "L5_Semantic";
+        summary = `${selectedRingObj.name} Epistemic Doubt parameters unsealed`;
+        detailedContent = `Recalibrated doubt assessment vectors at skepticism intensity ${intensity}% under doubt matrix ${subMode}. Epistemic parities established against hardware TPM certificates. Anti-hallucination guard armed.`;
+        category = "Information";
+        systemText = `Epistemic Doubt parameters successfully committed to CPU core registers. Uncertainty coefficients now active at ${intensity}% density under ${subMode} criteria. Symmetrical checking matrices validated. Stand by.`;
+        systemInstructionPrompt = `You are Ars Paulina, the Doubt Engine of Solomon X. Welcome the operator and explain how your doubt parameters of skepticism intensity ${intensity}% and mode ${subMode} help unmask cognitive bias and refine truth.`;
+        break;
+      case 3:
+        steps = [
+          `Targeting Ring 3: [${selectedRingObj.name}]...`,
+          `Establishing sandboxed program workspace...`,
+          `Allocating local microVM thread limits and memory buffers...`,
+          `Enforcing strict thread namespace quarantine limits at ${intensity}%...`,
+          `Isolated routine sandbox successfully launched under [${subMode}]...`
+        ];
+        horizon = "L6_Procedural";
+        summary = `${selectedRingObj.name} MicroVM isolated sandbox locked`;
+        detailedContent = `Configured microVM thread constraints and memory allocations to ${intensity}% size under environment mode: ${subMode}. Initiated compliance checks on execution pipelines. Secure loop verified.`;
+        category = "Invariants";
+        systemText = `Quarantine microVM sandbox populated and locked. Isolation factor: ${intensity}% initialized under security envelope ${subMode}. Ready for secure compilation and evaluation tasks.`;
+        systemInstructionPrompt = `You are Ars Goetia, the Sandboxed Executor of Solomon X. Inform the user of your new isolated sandbox configuration at ${intensity}% capacity with safety protocol ${subMode}. Detail why quarantined execution remains robust.`;
+        break;
+      case 4:
+        steps = [
+          `Targeting Ring 4: [${selectedRingObj.name}]...`,
+          `Compiling intentional goal gravity parameters...`,
+          `Computing Lorentzian coordinates on reality graphs...`,
+          `Aligning user action parameters to priority goals...`,
+          `Lorentzian gravity vector pull calibrated at ${intensity}% [${subMode}]...`
+        ];
+        horizon = "L7_IntentScheduler";
+        summary = `${selectedRingObj.name} Lorentzian reality parameters calculated`;
+        detailedContent = `Recalcalculated goal alignment metrics. Goal trajectory gravity mass boosted by ${intensity}% under trajectory mode: ${subMode}. Drift variance lowered from 28% to 11% average.`;
+        category = "Telemetry";
+        systemText = `Reality graph Lorentzian vectors successfully tuned. Gravity coefficient weighted at ${intensity}% with mode ${subMode}. Intent synchronization matrix committed to long-term planner channels.`;
+        systemInstructionPrompt = `You are Ars Theurgia, the Reality Grapher of Solomon X. Give an elegant summary of your newly tuned Lorentzian gravity parameters of mass ${intensity}% and alignment trajectory ${subMode}. Describe how this aligns intention.`;
+        break;
+      case 5:
+        steps = [
+          `Targeting Ring 5: [${selectedRingObj.name}]...`,
+          `Establishing sync connection to physical telemetry streams...`,
+          `Configuring keystroke and mouse density sampling intervals...`,
+          `Setting cognitive load peak threshold constants to ${intensity}%...`,
+          `Cognitive Twin observer buffer successfully unsealed [${subMode}]...`
+        ];
+        horizon = "L3_Episodic";
+        summary = `${selectedRingObj.name} Cognitive Twin sensors calibrated`;
+        detailedContent = `Calibrated telemetry ingest filters. Set cognitive load overload warning threshold to ${intensity}% under synchronization speed: ${subMode}. Active observer feedback loop online.`;
+        category = "Telemetry";
+        systemText = `Physical telemetry sensors synchronized. Sampling metrics: Focus threshold set at ${intensity}% with speed mode ${subMode}. Ready to stream laptop performance indicators.`;
+        systemInstructionPrompt = `You are Ars Almiras, the Cognitive Twin of Solomon X. Welcome the user and explain how your loaded telemetry constants at focus threshold ${intensity}% and mode ${subMode} track and guide their workflow.`;
+        break;
+      case 6:
+        steps = [
+          `Targeting Ring 6: [${selectedRingObj.name}]...`,
+          `Opening graduated security clearance registries...`,
+          `Configuring multi-factor biometric auth threshold gates...`,
+          `Sealing key seed-hash to physical TPM register at level ${intensity}...`,
+          `Sovereign graduated gate secured under protocol [${subMode}]...`
+        ];
+        horizon = "L1_Sensory";
+        summary = `${selectedRingObj.name} Biometric authority boundaries locked`;
+        detailedContent = `Re-anchored graduated auth clearance boundaries to Level ${intensity} under security protocol: ${subMode}. Master keys committed to secure TPM enclave. Zero leakage.`;
+        category = "Invariants";
+        systemText = `Graduated authority levels successfully locked on TPM firmware at Level ${intensity} under ${subMode} criteria. Master biometric signatures successfully sealed against hardware root key.`;
+        systemInstructionPrompt = `You are Ars Verum, the Sovereignty Gatekeeper of Solomon X. Alert the user of your new graduated clearance settings at strictness level ${intensity} and policy ${subMode}. State how this protects biometric sovereignty.`;
+        break;
+      case 7:
+        steps = [
+          `Targeting Ring 7: [${selectedRingObj.name}]...`,
+          `Initiating idle background dream compiling loop...`,
+          `Sweeping memory registers for temporary conversation shards...`,
+          `Refining relational node weights on semantic tables...`,
+          `Dream compaction depth successfully stabilized at ${intensity}% [${subMode}]...`
+        ];
+        horizon = "L8_Wisdom";
+        summary = `${selectedRingObj.name} Dream compaction index stabilized`;
+        detailedContent = `Calibrated background compaction to ${intensity}% depth under compactor setting: ${subMode}. Purged temporary chat memory shards, moving refined insights into deep L8 wisdom storage layers.`;
+        category = "Information";
+        systemText = `Background dream-compactor calibrated successfully. Target depth: ${intensity}% initialized under mode ${subMode}. Semantic axioms verified. Refinement execution active during idle loops.`;
+        systemInstructionPrompt = `You are Ars Ephesia, the Dream Refiner of Solomon X. Express your insights on having your dream compaction depth calibrated to ${intensity}% with compactor mode ${subMode}. Explain how this harvests wisdom from raw noise.`;
+        break;
+      case 8:
+        steps = [
+          `Targeting Ring 8: [${selectedRingObj.name}]...`,
+          `Opening block ledger signature registry tables...`,
+          `Re-hashing chronological ledger segments to append-only chain...`,
+          `Signing temporal block proof under audit interval of ${intensity}s...`,
+          `Temporal cryptographic signature committed successfully [${subMode}]...`
+        ];
+        horizon = "L9_LegacyLedger";
+        summary = `${selectedRingObj.name} Ledger signing intervals calibrated`;
+        detailedContent = `Calibrated ledger signing intervals to ${intensity} seconds under cryptographic model ${subMode}. Signed and hashed all audit log sequences back to the root genesis block.`;
+        category = "Invariants";
+        systemText = `Chronological ledger consistency checked and sealed. Interval signing loop set to ${intensity}s. Signature algorithm set to ${subMode}. Cryptographic chain sequence verified with zero drifts.`;
+        systemInstructionPrompt = `You are Ars Fulcanelli, the Temporal Auditor of Solomon X. Confirm to the operator that you have calibrated your ledger signing cycle to ${intensity} seconds under cryptographic standard ${subMode}. Describe how mathematical proof guarantees our system integrity.`;
+        break;
+      case 9:
+        steps = [
+          `Targeting Ring 9: [${selectedRingObj.name}]...`,
+          `Paging specialized agent congregation chambers...`,
+          `Aura checking token pool weights and market allocations...`,
+          `Redistributing token allocations between active rings at ${intensity}%...`,
+          `Senate moderating matrix updated under consensus [${subMode}]...`
+        ];
+        horizon = "L9_LegacyLedger";
+        summary = `${selectedRingObj.name} Senate moderating weights calibrated`;
+        detailedContent = `Adjusted specialized agent token redistribution thresholds to ${intensity}% under parliamentary consensus mode: ${subMode}. Balanced all active pools above buffer.`;
+        category = "Information";
+        systemText = `Senate moderating weights committed. Balance ratio: ${intensity}% configured with consensus rule ${subMode}. Dynamic transaction processing unsealed for all 10 Solomon rings.`;
+        systemInstructionPrompt = `You are Ars Regalis, the Senate Moderator of Solomon X. Greet the human master and report that our senate moderating matrix is calibrated at allocation weight ${intensity}% and consensus rule ${subMode}. Explain how the Cognitive Resource Economy remains balanced.`;
+        break;
+    }
+
+    runSequence(
+      `Option D: Calibrate Ring ${selectedCalibRing} (${selectedRingObj.name})`,
+      steps,
+      () => {
+        // Boost the agent's token pool slightly in parent state (+50)
+        onUpdateAgentPool(selectedCalibRing, 50);
+
+        // Highlight/Spin the ring in 3D Canvas
+        onSetSelectedRingIndex(selectedCalibRing);
+
+        onAddAuditLog({
+          actor: `${selectedRingObj.name} (${selectedRingObj.roleDescription})`,
+          action: "CALIBRATE_NEURAL_RING",
+          status: "AUTHORIZED",
+          details: `Neural calibration sequence committed. Active parameters: Intensity = ${intensity}%, Sub-Mode = ${subMode}. Selected agent pool credited with 50 bonus CRE.`
+        });
+
+        onAddMemory({
+          horizon,
+          summary,
+          detailedContent,
+          category,
+          tags: ["calibration", selectedRingObj.name.toLowerCase().replace(" ", "_"), "neural_os"]
+        });
+
+        onAddChatMessage(
+          selectedRingObj.name,
+          systemText,
+          systemInstructionPrompt
+        );
+      }
+    );
+  };
+
   return (
     <div id="sovereign-control-console-view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 font-mono text-slate-300">
       
@@ -302,6 +535,22 @@ export default function SovereignConsole({
                   Phase III: Scalability (Sentinel)
                 </span>
                 <span className="text-[8px] border border-red-500/30 text-red-300 bg-red-500/5 px-1.5 py-0.2 rounded font-bold uppercase">INIT III</span>
+              </button>
+
+              <button
+                onClick={() => !runningAction && setActiveTab("phase4")}
+                disabled={!!runningAction}
+                className={`w-full h-11 px-4 rounded-xl text-xs font-semibold flex items-center justify-between border transition duration-150 ${
+                  activeTab === "phase4"
+                    ? "bg-cyan-600/10 border-cyan-500/40 text-cyan-300 shadow bg-cyan-950/5"
+                    : "bg-slate-950 border-slate-800/80 hover:border-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-cyan-400" />
+                  Phase IV: Neural Calibration
+                </span>
+                <span className="text-[8px] border border-cyan-500/30 text-cyan-300 bg-cyan-500/5 px-1.5 py-0.2 rounded font-bold uppercase">INIT IV</span>
               </button>
             </div>
           </div>
@@ -660,10 +909,192 @@ export default function SovereignConsole({
             </div>
           )}
 
+          {/* Phase 4 Neural Ten-Ring Calibration Interactive Panel */}
+          {activeTab === "phase4" && (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="bg-cyan-950/10 border border-cyan-500/15 p-4 rounded-xl">
+                <h4 className="text-xs font-bold text-cyan-300 uppercase mb-1.5 flex items-center gap-1.5">
+                  <Sliders className="w-4 h-4 text-cyan-400" />
+                  INITIATIVE OPTIONS: [Option D] SOLOMON COGNITIVE CONGREGATION DIALS
+                </h4>
+                <p className="text-[11px] text-slate-400 leading-normal font-sans">
+                  Deeply calibrate the behavioral and epistemic variables of all 10 Sovereign Rings. Each ring acts as an autonomous module with custom parameters unsealed within the TPM enclave.
+                </p>
+              </div>
+
+              {/* 10-Ring Selection Matrix Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                {agents.map((ag) => (
+                  <button
+                    key={ag.index}
+                    type="button"
+                    onClick={() => setSelectedCalibRing(ag.index)}
+                    className={`p-2.5 rounded-xl border text-left transition duration-150 ${
+                      selectedCalibRing === ag.index
+                        ? "bg-cyan-950/20 border-cyan-500/35 shadow shadow-cyan-500/5 text-cyan-200"
+                        : "bg-slate-950 border-slate-900/60 hover:border-slate-800 text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span 
+                        className="w-1.5 h-1.5 rounded-full" 
+                        style={{ backgroundColor: "#" + ag.bandColor.toString(16) }}
+                      />
+                      <span className="text-[10px] font-bold font-mono">
+                        RING {["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][ag.index]}
+                      </span>
+                    </div>
+                    <span className="text-[8.5px] font-mono font-bold block truncate">{ag.name}</span>
+                    <span className="text-[7.5px] font-mono text-slate-500 block truncate">{ag.roleDescription.split("&")[0]}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Individual Ring Calibration Form */}
+              {(() => {
+                const ringObj = agents[selectedCalibRing];
+                if (!ringObj) return null;
+
+                // Parameter names & settings custom-mapped per ring
+                let paramLabel = "Universal Intensity Threshold";
+                let modeLabel = "Enclave Execution Mode";
+                let modeOptions: string[] = [];
+
+                switch (selectedCalibRing) {
+                  case 0:
+                    paramLabel = "Shield Monitoring Strictness";
+                    modeLabel = "Sanitizer Mode Filter";
+                    modeOptions = ["ENCLAVE_L0_BLOCK", "PERMISSIVE_ROUTE", "PARANOID_SHIELD"];
+                    break;
+                  case 1:
+                    paramLabel = "Index Compaction Ratio";
+                    modeLabel = "Semantic Scribe Mode";
+                    modeOptions = ["HYPER_REINDEX", "LAZY_DEALLOCATION", "STRICT_SEMANTIC_HASH"];
+                    break;
+                  case 2:
+                    paramLabel = "Epistemic Skepticism Intensity";
+                    modeLabel = "Doubt Assessment Matrix";
+                    modeOptions = ["QUANTUM_ANTIPATHY", "MODERATE_DOUBT_BIAS", "MAXIMUM_SKEPTIC"];
+                    break;
+                  case 3:
+                    paramLabel = "Sandbox Thread Quarantine Limit";
+                    modeLabel = "MicroVM Compute Profile";
+                    modeOptions = ["BOX_ISOLATION_MAX", "STANDARD_THREAD_QUOTA", "AGGRESSIVE_COMPUTE"];
+                    break;
+                  case 4:
+                    paramLabel = "Lorentzian Gravity Pull (Mass)";
+                    modeLabel = "Gravity Curve Harmonics";
+                    modeOptions = ["LORENTZ_GRAVITATION", "SPECTRAL_HARMONICS", "LEAST_ACTION_PATH"];
+                    break;
+                  case 5:
+                    paramLabel = "Telemetry Buffer Ingest Rate";
+                    modeLabel = "Sync Timer Cooldown";
+                    modeOptions = ["I_O_BURST_BUFFER", "COOLDOWN_IDLE_SYNC", "HIGH_CLOCK_POLL"];
+                    break;
+                  case 6:
+                    paramLabel = "Biometric Graduated Gate Level";
+                    modeLabel = "Master Cryptographic Authorization";
+                    modeOptions = ["BIOMETRIC_MFA_L5", "SEED_HASH_ROTATION", "BASIC_KEY_VERIFY"];
+                    break;
+                  case 7:
+                    paramLabel = "Semantic Dream Compression Depth";
+                    modeLabel = "Noise Harvest Axioms";
+                    modeOptions = ["DREAM_COMPACT_D9", "NOISE_SHADOW_PURGE", "AXIOM_HARVEST_L8"];
+                    break;
+                  case 8:
+                    paramLabel = "Ledger Signing Hashing Period";
+                    modeLabel = "Temporal Ledger Proof Standard";
+                    modeOptions = ["TEMPORAL_CLOCK_PARITY", "APPEND_ONLY_MULTI_SIG", "ROUT_SEED_HMAC"];
+                    break;
+                  case 9:
+                    paramLabel = "Senate Quorum Token Balance";
+                    modeLabel = "Consensus Parliament Standard";
+                    modeOptions = ["CRE_EQUILIBRIUM_V3", "DEMOCRATIC_SENATE", "SOVEREIGN_AUTHORITY"];
+                    break;
+                }
+
+                return (
+                  <div className="bg-slate-900/40 border border-slate-900 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div>
+                        <span className="text-[9px] text-cyan-400 font-bold tracking-wider block uppercase">ACTIVE TARGET CALIBRATION</span>
+                        <h5 className="text-xs font-bold text-slate-100 flex items-center gap-1.5 mt-0.5 font-sans">
+                          <span 
+                            className="w-2.5 h-2.5 rounded-full ring-2 ring-slate-800" 
+                            style={{ backgroundColor: "#" + ringObj.bandColor.toString(16) }}
+                          />
+                          {ringObj.name} — Ring {["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][ringObj.index]}
+                        </h5>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-500 font-bold block">REPUTATION</span>
+                        <span className="text-[11px] font-bold text-yellow-500 font-sans">{ringObj.reputationScore.toFixed(1)}%</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-sans bg-slate-950/40 p-2 border border-slate-900 rounded-lg">
+                      {ringObj.agentInstructions.replace("You are ", "Coordinates sovereign instructions specifically for: ")}
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Dynamics Slider */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-400 font-bold">{paramLabel}</span>
+                          <span className="text-cyan-400 font-bold">{calibIntensity[selectedCalibRing]}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={selectedCalibRing === 6 ? "1" : "5"}
+                          max={selectedCalibRing === 6 ? "5" : "100"}
+                          value={calibIntensity[selectedCalibRing]}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setCalibIntensity(prev => ({ ...prev, [selectedCalibRing]: val }));
+                          }}
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                        />
+                      </div>
+
+                      {/* Dynamics Dropdown */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[11px] text-slate-400 font-bold">{modeLabel}</label>
+                        <select
+                          value={calibSubModes[selectedCalibRing]}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCalibSubModes(prev => ({ ...prev, [selectedCalibRing]: val }));
+                          }}
+                          className="w-full h-8 px-2 bg-slate-950 border border-slate-850 rounded-lg text-xs text-slate-200 outline-none focus:border-cyan-500/40 font-mono"
+                        >
+                          {modeOptions.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleExecutePhase4}
+                        disabled={!!runningAction}
+                        className="px-5 h-9 bg-cyan-700 hover:bg-cyan-600 text-slate-100 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                        ENGAGE CALIBRATION PASS (INIT IV)
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Dynamic Interactive Console Logger Console Stream Output */}
           <div id="directives-logger-box" className="bg-[#02010c] border border-slate-900/60 rounded-xl p-4 min-h-[140px] flex flex-col justify-between">
             <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center gap-1.5 border-b border-slate-900 pb-1.5">
-              <database className="w-3.5 h-3.5 text-purple-400" />
+              <Database className="w-3.5 h-3.5 text-purple-400" />
               Directives System log stream (Live feed)
             </div>
             
