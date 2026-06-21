@@ -17,7 +17,8 @@ import {
   Workflow,
   Check,
   RefreshCw,
-  Gauge
+  Gauge,
+  Activity
 } from "lucide-react";
 import { MemoryItem, AuditLog, AgentSpec } from "../types";
 
@@ -38,7 +39,7 @@ export default function SovereignConsole({
   onSetSelectedRingIndex,
   onUpdateAgentPool
 }: SovereignConsoleProps) {
-  const [activeTab, setActiveTab] = useState<"phase1" | "phase2" | "phase3" | "phase4">("phase1");
+  const [activeTab, setActiveTab] = useState<"phase1" | "phase2" | "phase3" | "phase4" | "phase5">("phase1");
   const [logs, setLogs] = useState<string[]>([]);
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -92,6 +93,39 @@ export default function SovereignConsole({
     8: "TEMPORAL_CLOCK_PARITY",
     9: "CRE_EQUILIBRIUM_V3"
   });
+
+  // ─── Phase 5: Solomon X Kernel Diagnostics States ───
+  const [selectedKernelLayer, setSelectedKernelLayer] = useState<number>(0);
+  const [tpmAttestationPassed, setTpmAttestationPassed] = useState<boolean | null>(null);
+  const [goalFirewallMode, setGoalFirewallMode] = useState<"GREEN" | "YELLOW" | "RED">("YELLOW");
+  const [sympatheticTone, setSympatheticTone] = useState<number>(0.42);
+  const [parasympatheticTone, setParasympatheticTone] = useState<number>(0.58);
+  const [vsaSearchTerm, setVsaSearchTerm] = useState<string>("neural bypass routing");
+  const [vsaResolvedItems, setVsaResolvedItems] = useState<Array<{ text: string; confidence: number; resonance: number }>>([
+    { text: "L8_WISDOM: [Rule 14] When user typing speed > 80 wpm, suppress ambient voice ticks", confidence: 0.96, resonance: 0.89 },
+    { text: "L5_SEM_EMBEDDING: 'high-frequency secure sequence synchronization bus'", confidence: 0.88, resonance: 0.74 }
+  ]);
+  const [dreamingStatus, setDreamingStatus] = useState<string>("IDLE");
+  const [vcgChosenTask, setVcgChosenTask] = useState<string>("DRAFT_QUANTUM_CODE");
+  const [vcgResult, setVcgResult] = useState<any>(null);
+  const [lmsrPredictionOdds, setLmsrPredictionOdds] = useState<Record<string, number>>({
+    "ci_break": 0.27,
+    "sandbox_leak": 0.04,
+    "memory_resonance_cap": 0.81
+  });
+  const [sensorGazeX, setSensorGazeX] = useState<number>(512);
+  const [sensorGazeY, setSensorGazeY] = useState<number>(384);
+  const [sensorMouseSpeed, setSensorMouseSpeed] = useState<number>(14.2);
+  const [fusedIntentClass, setFusedIntentClass] = useState<string>("SYSTEM_DIAGNOSTICS");
+  const [fusedIntentConf, setFusedIntentConf] = useState<number>(0.94);
+  const [gestureRecognized, setGestureRecognized] = useState<string>("NONE");
+  const [sandboxCpuLimit, setSandboxCpuLimit] = useState<number>(500);
+  const [sandboxRamLimit, setSandboxRamLimit] = useState<number>(512);
+  const [vmActive, setVmActive] = useState<boolean>(false);
+  const [ebpfSyscalls, setEbpfSyscalls] = useState<Array<{ pid: number; comm: string; syscall: string; latency_ns: number }>>([
+    { pid: 1408, comm: "solomon-daemon", syscall: "sys_epoll_wait", latency_ns: 420 },
+    { pid: 1412, comm: "firecracker", syscall: "sys_mmap", latency_ns: 1250 }
+  ]);
 
   // Add line to terminal logs helper
   const addLog = (msg: string) => {
@@ -552,6 +586,22 @@ export default function SovereignConsole({
                 </span>
                 <span className="text-[8px] border border-cyan-500/30 text-cyan-300 bg-cyan-500/5 px-1.5 py-0.2 rounded font-bold uppercase">INIT IV</span>
               </button>
+
+              <button
+                onClick={() => !runningAction && setActiveTab("phase5")}
+                disabled={!!runningAction}
+                className={`w-full h-11 px-4 rounded-xl text-xs font-semibold flex items-center justify-between border transition duration-150 ${
+                  activeTab === "phase5"
+                    ? "bg-emerald-600/10 border-emerald-500/40 text-emerald-300 shadow bg-emerald-950/5"
+                    : "bg-slate-950 border-slate-800/80 hover:border-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-emerald-400" />
+                  Phase V: Kernel Diagnostics
+                </span>
+                <span className="text-[8px] border border-emerald-500/30 text-emerald-300 bg-emerald-500/5 px-1.5 py-0.2 rounded font-bold uppercase">L0-L4 CORE</span>
+              </button>
             </div>
           </div>
 
@@ -598,6 +648,8 @@ export default function SovereignConsole({
               {activeTab === "phase1" && "SOVEREIGN BLUEPRINT DIRECTIVE PANEL — PHASE I"}
               {activeTab === "phase2" && "SYNERGY CORRIDOR ASSET REGISTRY — PHASE II"}
               {activeTab === "phase3" && "SENTINEL NETWORK DEFENSIVE CENTER — PHASE III"}
+              {activeTab === "phase4" && "NEURAL TEN-RING CALIBRATION DIALS — PHASE IV"}
+              {activeTab === "phase5" && "SOLOMON X KERNEL OS DIAGNOSTICS & SYSTEM BLUEPRINTS — PHASE V"}
             </span>
           </div>
           <span className="text-[10px] text-slate-500 font-mono">STATUS: HIGH INTENSITY</span>
@@ -1088,6 +1140,710 @@ export default function SovereignConsole({
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {/* Phase 5 Kernel Diagnostics View */}
+          {activeTab === "phase5" && (
+            <div className="space-y-6 animate-fadeIn text-slate-300 font-mono">
+              <div className="bg-emerald-950/10 border border-emerald-500/15 p-4 rounded-xl">
+                <h4 className="text-xs font-bold text-emerald-300 uppercase mb-1.5 flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 text-emerald-400" />
+                  SOVEREIGN SYSTEM KERNEL DIAGNOSTIC DECK
+                </h4>
+                <p className="text-[11px] text-slate-400 leading-normal font-sans">
+                  Deeply explore, query, and simulate the core system layers (L0 to L4) defined under Solomon X's physical and cognitive operating architecture.
+                </p>
+              </div>
+
+              {/* Layer Selection Tabs */}
+              <div className="flex border-b border-slate-900 scrollbar-none overflow-x-auto gap-2">
+                {[
+                  { id: 0, name: "Layer 0: Core Invariants", subtitle: "TPM, Goal-Firewall, ANS-A" },
+                  { id: 1, name: "Layer 1: Cognitive Substrate", subtitle: "9-Horizons, VSA, Dreams" },
+                  { id: 2, name: "Layer 2: Orchestration", subtitle: "VCG Auction, LMSR Market" },
+                  { id: 3, name: "Layer 3: Perception", subtitle: "Tensor-Fusion, Gesture wfst" },
+                  { id: 4, name: "Layer 4: Sandbox & Trace", subtitle: "Firecracker, eBPF Trace" }
+                ].map((ly) => (
+                  <button
+                    key={ly.id}
+                    onClick={() => setSelectedKernelLayer(ly.id)}
+                    className={`flex-1 min-w-[140px] pb-2 text-left border-b-2 transition duration-150 px-2 py-1 ${
+                      selectedKernelLayer === ly.id
+                        ? "border-emerald-500 text-emerald-300 bg-emerald-500/5 rounded-t-lg"
+                        : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900/40 rounded-t-lg"
+                    }`}
+                  >
+                    <span className="text-[10px] font-bold block">{ly.name}</span>
+                    <span className="text-[8px] text-slate-500 block truncate font-sans">{ly.subtitle}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* LAYER CONTENT WORKSPACES */}
+              <div className="bg-slate-900/20 border border-slate-900 rounded-xl p-4 min-h-[300px]">
+                
+                {/* LAYER 0: CORE INVARIANTS */}
+                {selectedKernelLayer === 0 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Left: TPM Seal & Signatures */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-900 pb-1.5">
+                          <Gauge className="w-3.5 h-3.5 text-emerald-400" />
+                          Platform Security Attestation (TPM-2.0)
+                        </span>
+                        
+                        <div className="space-y-2 text-[10px]">
+                          <div className="flex justify-between items-center bg-slate-900/60 p-1.5 rounded border border-slate-850">
+                            <span className="text-slate-500">PCR-0 (BOOT FIRMWARE HASH)</span>
+                            <span className="text-slate-300 truncate w-32 text-right text-[9px]">ae491d92bf3b11e2f8</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-slate-900/60 p-1.5 rounded border border-slate-850">
+                            <span className="text-slate-500">PCR-1 (KERNEL CODE HASH)</span>
+                            <span className="text-slate-300 truncate w-32 text-right text-[9px]">e2a87bc12bb1e16f39</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-slate-900/60 p-1.5 rounded border border-slate-850">
+                            <span className="text-slate-500">PCR-2 (SOLOMON-DAEMON SYSTEM)</span>
+                            <span className="text-emerald-300 truncate w-32 text-right text-[9px]">3fb2912a7bf30db18c</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-slate-900/60 p-1.5 rounded border border-slate-850">
+                            <span className="text-slate-500">TPM IDENTITY KEY PAIR</span>
+                            <span className="text-slate-300">Ed25519 (TPM_SEALED)</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
+                          <button
+                            onClick={() => {
+                              addLog("TPM Attestation requested.");
+                              addLog("Reading PCR-0 hardware boot metrics...");
+                              addLog("Reading PCR-1 operating system kernels...");
+                              addLog("Verifying TPM-bound identity signature chain...");
+                              addLog("Deriving dynamic verification entropy code via HKDF-SHA256.");
+                              setTpmAttestationPassed(true);
+                              addLog("SUCCESS: Secure Hardware Attestation Verified. Platforms integrity guaranteed.");
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white rounded font-sans font-bold text-[9px] h-7 px-3 flex-1 flex items-center justify-center gap-1 transition"
+                          >
+                            Verify TPM Seal
+                          </button>
+                          {tpmAttestationPassed !== null && (
+                            <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded ${tpmAttestationPassed ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border border-red-500/20 text-red-400"}`}>
+                              {tpmAttestationPassed ? "PASSED" : "FAILED"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Goal-Firewall (OPA-WASM) */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-900 pb-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                          Goal-Firewall Policies (OPA-WASM)
+                        </span>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-slate-500">POLICY THRESHOLD TIER</span>
+                            <div className="flex gap-1.5">
+                              {["GREEN", "YELLOW", "RED"].map((mode) => (
+                                <button
+                                  key={mode}
+                                  onClick={() => {
+                                    setGoalFirewallMode(mode as any);
+                                    addLog(`OPA-WASM Goal-Firewall reassigned to tier: ${mode}`);
+                                    if (mode === "GREEN") {
+                                      addLog("Allowed: All read operations. Relaxed verification schedules.");
+                                    } else if (mode === "YELLOW") {
+                                      addLog("Enforced: Explicit confirmations demanded for file write ops.");
+                                    } else {
+                                      addLog("LOCKDOWN ACTIVE: Network bindings & privileged commands locked. Biometric attestation required.");
+                                    }
+                                  }}
+                                  className={`px-1.5 py-0.5 text-[8.5px] font-bold rounded border ${
+                                    goalFirewallMode === mode
+                                      ? "bg-blue-500/10 border-blue-400 text-blue-300"
+                                      : "bg-slate-900 border-slate-850 hover:bg-slate-800 text-slate-500"
+                                  }`}
+                                >
+                                  {mode}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="p-2 bg-slate-950 border border-slate-850 rounded text-[9px] text-slate-400 leading-relaxed max-h-[85px] overflow-y-auto whitespace-pre font-mono">
+                            {`package solomon.goal\n\ndefault allow = false\n\nallow {\n  input.action.type == "read"\n}\n\ndeny_yellow {\n  input.action.type == "write"\n  not user_confirmed\n}\n\ndeny_red {\n  input.action.type == "network"\n  not biometric_atttested_within_300s\n}`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Autonomic Nervous System Feed (ANS-A) */}
+                    <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-2">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-900 pb-1.5">
+                        <Activity className="w-3.5 h-3.5 text-orange-400" />
+                        Autonomic Nervous System Analog Feedback Loop (ANS-A)
+                      </span>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 text-[10px]">
+                        <div className="space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 font-mono">SYMPATHETIC TONE (α·Δprediction_error + β·entropy)</span>
+                            <span className="text-orange-400 font-bold font-mono">{(sympatheticTone).toFixed(3)}</span>
+                          </div>
+                          <div className="h-1 bg-slate-850 rounded-full overflow-hidden">
+                            <div className="h-full bg-orange-500 rounded" style={{ width: `${sympatheticTone * 100}%` }} />
+                          </div>
+                          <p className="text-[8.5px] text-slate-500 font-sans">Elevated values temporarily scale agent biddings/cooldown margins.</p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 font-mono">PARASYMPATHETIC TONE (δ·e^-λ·idle)</span>
+                            <span className="text-emerald-400 font-bold font-mono">{(parasympatheticTone).toFixed(3)}</span>
+                          </div>
+                          <div className="h-1 bg-slate-850 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded" style={{ width: `${parasympatheticTone * 100}%` }} />
+                          </div>
+                          <p className="text-[8.5px] text-slate-500 font-sans">Elevated values trigger subconscious synthetic sleep-compaction waves.</p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => {
+                            const newSym = Math.random();
+                            const newPara = 1 - newSym;
+                            setSympatheticTone(newSym);
+                            setParasympatheticTone(newPara);
+                            addLog(`ANS-A modulated manually. Sympathetic: ${newSym.toFixed(3)}, Parasympathetic: ${newPara.toFixed(3)}`);
+                          }}
+                          className="bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-sans font-bold text-[9px] h-6 px-3 rounded transition"
+                        >
+                          Pulse ANS-A Node
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* LAYER 1: COGNITIVE DATA SUBSTRATE */}
+                {selectedKernelLayer === 1 && (
+                  <div className="space-y-4 text-[10px]">
+                    {/* Top list: 9 Memory Horizons */}
+                    <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-2">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-900 pb-1.5">
+                        <Database className="w-3.5 h-3.5 text-purple-400" />
+                        9-Horizon Adaptive Cognitive Memory Index System
+                      </span>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-1 text-[9px]">
+                        {[
+                          { id: "L1", name: "Volatile Circular Cache", latency: "<0.12ms", size: "256 MiB", res: "98%" },
+                          { id: "L2", name: "Conversational Canvas SQLite", latency: "0.45ms", size: "512 MiB", res: "95%" },
+                          { id: "L3", name: "Episodic Timeline LanceDB", latency: "2.10ms", size: "2.0 GiB", res: "84%" },
+                          { id: "L4", name: "Relational Graph DuckDB", latency: "4.85ms", size: "4.0   GiB", res: "91%" },
+                          { id: "L5", name: "High-Dim Semantic FAISS", latency: "12.2ms", size: "Unlimited", res: "78%" },
+                          { id: "L6", name: "Procedural RocksDB Tree", latency: "1.12ms", size: "1.0 GiB", res: "89%" },
+                          { id: "L7", name: "Intent LLMDB Scheduler", latency: "5.44ms", size: "2.0 GiB", res: "92%" },
+                          { id: "L8", name: "Crystallized Wisdom Parquet", latency: "35.2ms", size: "5.0 GiB", res: "97%" },
+                          { id: "L9", name: "Cold Ledger Archive S3", latency: "420ms", size: "Unlimited", res: "12%" }
+                        ].map((hz) => (
+                          <div key={hz.id} className="bg-slate-900/40 border border-slate-850 p-2 rounded flex flex-col justify-between">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-bold text-emerald-400">{hz.id}</span>
+                              <span className="text-slate-500 font-sans">{hz.size}</span>
+                            </div>
+                            <span className="text-slate-300 font-sans truncate font-bold">{hz.name}</span>
+                            <div className="flex justify-between text-[8px] text-slate-500 mt-1 border-t border-slate-850 pt-1">
+                              <span>Lat: {hz.latency}</span>
+                              <span>Resonance: {hz.res}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* VSA Recall Search */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">
+                          Holographic Vector Recall (VSA binding: M = Σ role ⊛ filler)
+                        </span>
+                        
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] text-slate-500 block uppercase font-sans">Query concept term</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={vsaSearchTerm}
+                              onChange={(e) => setVsaSearchTerm(e.target.value)}
+                              className="flex-1 bg-slate-950 border border-slate-850 h-7 text-xs px-2 rounded text-slate-200 outline-none"
+                            />
+                            <button
+                              onClick={() => {
+                                addLog(`Requested Holographic VSA Recall on: '${vsaSearchTerm}'`);
+                                addLog("Constructing 10,240-dim random representation cue vector query...");
+                                addLog("Computing circular convolution binding inverted query over majority elements...");
+                                addLog("Scanning Gray-code adjacent hypercube lattice coordinates (radius r=2)...");
+                                
+                                const valChance = Math.random();
+                                const mockedResults = [
+                                  { text: `L8_WISDOM: [Principle] Prefer silent telemetry compact modes under load matching '${vsaSearchTerm}'`, confidence: 0.95 - valChance * 0.1, resonance: 0.92 - valChance * 0.1 },
+                                  { text: `L5_SEM_EMBEDDING: '${vsaSearchTerm} integration route vectors'`, confidence: 0.89 - valChance * 0.1, resonance: 0.81 - valChance * 0.1 }
+                                ];
+                                setVsaResolvedItems(mockedResults);
+                                addLog(`Recall complete. ${mockedResults.length} high-resonance memory blocks bound.`);
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-500 px-3 text-white rounded text-[10px] h-7 font-sans font-bold transition"
+                            >
+                              Recall
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Search Results */}
+                        <div className="space-y-1.5 max-h-[80px] overflow-y-auto">
+                          {vsaResolvedItems.map((item, idx) => (
+                            <div key={idx} className="bg-slate-900 border border-slate-850 p-1.5 rounded text-[9px] space-y-0.5">
+                              <span className="text-slate-200 block truncate">{item.text}</span>
+                              <div className="flex gap-4 text-slate-500 font-sans text-[8px]">
+                                <span>Confidence: {(item.confidence * 100).toFixed(1)}%</span>
+                                <span>Resonance score: {item.resonance.toFixed(3)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Dream Engine */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5 font-mono">
+                            Synthetic Sleep-Wake Dream Engine & Compaction
+                          </span>
+                          <p className="text-[9.5px] font-sans text-slate-400 leading-normal pt-1.5">
+                            Compacts volatile short-term observations (L1/L2) down into high-dimensional semantic spaces (L5) via Hebbian synapse updates.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-900">
+                          <span className="text-[9px] text-slate-500 font-bold font-mono">STATE: <span className="text-emerald-400 font-mono">{dreamingStatus}</span></span>
+                          <button
+                            onClick={() => {
+                              if (dreamingStatus !== "IDLE") return;
+                              setDreamingStatus("CONSOLIDATING");
+                              addLog("INITIATED COGNITIVE DREAM COMPACTION CYCLE.");
+                              addLog("[Hebbian Synapse Update] Recalculating weight offsets over 1,480 node coordinates...");
+                              addLog("[Glymphatic Flush] Flushing excess prediction error garbage...");
+                              setTimeout(() => {
+                                setDreamingStatus("WISDOM_EXTRACTION");
+                                addLog("Running symbolic regression to extract rules...");
+                                setTimeout(() => {
+                                  setDreamingStatus("IDLE");
+                                  addLog("DREAM CYCLE COMPLETED. Synaptic offsets downscaled. L8 wisdom principle database re-crystallized.");
+                                }, 1500);
+                              }, 1500);
+                            }}
+                            disabled={dreamingStatus !== "IDLE"}
+                            className="bg-purple-600 hover:bg-purple-500 text-white rounded text-[9.5px] h-7 px-3 font-sans font-bold transition disabled:opacity-50"
+                          >
+                            Execute Consolidate
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* LAYER 2: ORCHESTRATION & VCG MECHANISM */}
+                {selectedKernelLayer === 2 && (
+                  <div className="space-y-4 text-[10px]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* Left: Interactive VCG Auction Solver */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">
+                          Truthful Vickrey-Clarke-Groves (VCG) Cognitive Economy Auction
+                        </span>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] text-slate-500 block uppercase font-sans">Select specialized operation task</label>
+                          <div className="flex gap-2">
+                            <select
+                              value={vcgChosenTask}
+                              onChange={(e) => setVcgChosenTask(e.target.value)}
+                              className="flex-1 bg-slate-950 border border-slate-850 h-8 px-2 text-xs rounded text-slate-200 outline-none font-mono"
+                            >
+                              <option value="DRAFT_QUANTUM_CODE">Draft Quantum Secure Bypass Code (R5 focus)</option>
+                              <option value="FORESEE_TIMELINE_BOTTLES">Foresee Hour Deadlines & Timeline Blocks (R2 focus)</option>
+                              <option value="ASSESS_CORE_SECURITY">Audit Cryptographic Security Holes (R6/7 focus)</option>
+                            </select>
+                            
+                            <button
+                              onClick={() => {
+                                addLog(`VCG Auction launched for job directive: [${vcgChosenTask}]`);
+                                addLog("Recalculating agent capability affinity dot products...");
+                                
+                                // Calculate bids for top matching agents
+                                let chosenWinner = "ars_almadel";
+                                let winIndex = 0;
+                                let bestAffinity = 0;
+                                
+                                if (vcgChosenTask === "DRAFT_QUANTUM_CODE") {
+                                  chosenWinner = "ars_almiras"; winIndex = 5;
+                                } else if (vcgChosenTask === "FORESEE_TIMELINE_BOTTLES") {
+                                  chosenWinner = "ars_paulina"; winIndex = 2;
+                                } else {
+                                  chosenWinner = "ars_ephesia"; winIndex = 7;
+                                }
+
+                                const resultsVec = agents.map((ag) => {
+                                  const isIdeal = ag.index === winIndex;
+                                  const competence = isIdeal ? 0.96 : (0.2 + ag.index * 0.06);
+                                  const costCpu = isIdeal ? 14.5 : (8.0 + ag.index * 4);
+                                  const effectiveUtility = (0.85 * competence * ag.reputationScore) / (costCpu * 0.05);
+                                  return {
+                                    index: ag.index,
+                                    name: ag.name,
+                                    competence: competence * 100,
+                                    cost: costCpu,
+                                    effUtil: effectiveUtility,
+                                  };
+                                }).sort((a,b) => b.effUtil - a.effUtil);
+
+                                setVcgResult({
+                                  winnerName: resultsVec[0].name,
+                                  winnerIndex: resultsVec[0].index,
+                                  paymentValue: resultsVec[1].effUtil.toFixed(2),
+                                  bidsList: resultsVec.slice(0, 4)
+                                });
+
+                                addLog(`Auction resolved. Winner selected: ${resultsVec[0].name}. Vickrey Payment rate calculated as: ${resultsVec[1].effUtil.toFixed(2)} CRE.`);
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-500 px-3 text-white rounded text-[10px] h-8 font-sans font-bold transition"
+                            >
+                              Run VCG Solver
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* VCG Auction Output Display */}
+                        {vcgResult ? (
+                          <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-lg space-y-2">
+                            <div className="flex justify-between font-bold border-b border-slate-850 pb-1.5">
+                              <span className="text-emerald-400">WINNING AGENT: {vcgResult.winnerName}</span>
+                              <span className="text-amber-400 font-mono">VCG CHARGE: {vcgResult.paymentValue} CRE</span>
+                            </div>
+                            
+                            <table className="w-full text-[8.5px] text-slate-400 font-sans">
+                              <thead>
+                                <tr className="border-b border-slate-850 text-slate-500 font-bold uppercase">
+                                  <th className="text-left py-1">AGENT IDENT</th>
+                                  <th className="text-right py-1">COMPETENCE</th>
+                                  <th className="text-right py-1">EST CPU-MS</th>
+                                  <th className="text-right py-1">EFFECTIVE UTIL</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {vcgResult.bidsList.map((bid: any, ix: number) => (
+                                  <tr key={bid.index} className={ix === 0 ? "font-bold text-slate-200" : ""}>
+                                    <td className="py-1">{bid.name}</td>
+                                    <td className="text-right">{bid.competence.toFixed(1)}%</td>
+                                    <td className="text-right">{bid.cost.toFixed(1)}ms</td>
+                                    <td className="text-right text-emerald-300">{(bid.effUtil).toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="bg-slate-950 border border-slate-900 p-4 text-center rounded text-slate-650 italic font-sans text-[9px]">
+                            Launch VCG mechanism calculation solver to view economic knapsack results...
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right: LMSR Internal Prediction Markets */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5 font-mono">
+                          Internal Logarithmic Market Scoring Rule (LMSR) Prediction Markets
+                        </span>
+                        
+                        <p className="text-[9.5px] text-slate-500 font-sans leading-normal">
+                          Specialist agents place confidence bets on operational success. LMSR math ensures fast convergence of market prices vector to calibrated probabilities.
+                        </p>
+
+                        <div className="space-y-2 pt-1 font-mono">
+                          {[
+                            { key: "ci_break", title: "Target Commit Integrity failure rating", color: "text-red-400 bg-red-400/5 border-red-500/20" },
+                            { key: "sandbox_leak", title: "Firecracker guest escape probability", color: "text-orange-400 bg-orange-400/5 border-orange-500/20" },
+                            { key: "memory_resonance_cap", title: "Memory Horizon saturation risk", color: "text-cyan-400 bg-cyan-400/5 border-cyan-500/20" }
+                          ].map((market) => (
+                            <div key={market.key} className={`p-2 rounded border flex justify-between items-center ${market.color}`}>
+                              <div>
+                                <span className="text-[9.5px] font-bold block text-slate-300">{market.title}</span>
+                                <span className="text-[8px] text-slate-500 leading-none">Hypothesis token: {market.key}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-100">{(lmsrPredictionOdds[market.key] * 100).toFixed(0)}%</span>
+                                <div className="flex flex-col gap-0.5">
+                                  <button
+                                    onClick={() => {
+                                      setLmsrPredictionOdds(prev => {
+                                        const nextVal = Math.min(0.99, prev[market.key] + 0.05);
+                                        addLog(`LMSR betting purchase (YES) on '${market.key}': Price updated to ${(nextVal*100).toFixed(1)}%`);
+                                        return { ...prev, [market.key]: nextVal };
+                                      });
+                                    }}
+                                    className="bg-slate-800 hover:bg-slate-750 h-3.5 px-1 rounded text-[7.5px] text-slate-300 font-bold text-center border border-slate-700 select-none cursor-pointer"
+                                  >
+                                    YES
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setLmsrPredictionOdds(prev => {
+                                        const nextVal = Math.max(0.01, prev[market.key] - 0.05);
+                                        addLog(`LMSR betting purchase (NO) on '${market.key}': Price updated to ${(nextVal*100).toFixed(1)}%`);
+                                        return { ...prev, [market.key]: nextVal };
+                                      });
+                                    }}
+                                    className="bg-slate-800 hover:bg-slate-750 h-3.5 px-1 rounded text-[7.5px] text-slate-300 font-bold text-center border border-slate-700 select-none cursor-pointer"
+                                  >
+                                    NO
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* LAYER 3: MULTIMODAL PERCEPTION */}
+                {selectedKernelLayer === 3 && (
+                  <div className="space-y-4 text-[10px]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* Co-Equal Tensor Fusion */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5 font-mono">
+                          Tobias/Gaze & Keyboard Tensor-Fusion Model
+                        </span>
+
+                        <div className="space-y-2 text-[9px]">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-slate-900 p-2 rounded border border-slate-850">
+                              <span className="text-slate-500 block">GAZE TARGET</span>
+                              <span className="text-slate-200 font-bold">X: {sensorGazeX}px, Y: {sensorGazeY}px</span>
+                            </div>
+                            <div className="bg-slate-900 p-2 rounded border border-slate-850">
+                              <span className="text-slate-500 block">MOUSE CADENCE</span>
+                              <span className="text-slate-200 font-bold">{sensorMouseSpeed.toFixed(1)} mm/s</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-900 p-2 rounded border border-slate-850 space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">CP DECOMPOSITION INTENT PREDICTION (RANK=8)</span>
+                              <span className="text-emerald-400 font-bold">{(fusedIntentConf * 100).toFixed(1)}% CONF</span>
+                            </div>
+                            <span className="text-slate-100 font-bold block">{fusedIntentClass}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-1">
+                          <button
+                            onClick={() => {
+                              const x = Math.round(100 + Math.random() * 800);
+                              const y = Math.round(50 + Math.random() * 500);
+                              const speed = Math.random() * 60;
+                              const intents = ["SYSTEM_DIAGNOSTICS", "CODE_REFACTORING", "CRITICAL_DEFENSE", "TIMELINE_SCHEDULING"];
+                              const picked = intents[Math.floor(Math.random() * intents.length)];
+                              const conf = 0.82 + Math.random() * 0.17;
+                              
+                              setSensorGazeX(x);
+                              setSensorGazeY(y);
+                              setSensorMouseSpeed(speed);
+                              setFusedIntentClass(picked);
+                              setFusedIntentConf(conf);
+                              
+                              addLog(`Sensor inputs swept. Low-rank CP decomposition calculated. Injected predicted intent: [${picked}] (${(conf*100).toFixed(0)}% assurance).`);
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-500 px-3 text-white rounded text-[10px] h-7 font-sans font-bold transition"
+                          >
+                            Simulate Sensor Sweep
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Micro-Gesture Language (MGL) */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5 font-mono">
+                            Micro-Gesture Language (MGL) WFST Decoders
+                          </span>
+                          <p className="text-[9.5px] font-sans text-slate-400 leading-normal pt-1.5">
+                            Analyzes local hand landmarks sequences through a Weighted Finite-State Transducer (WFST) compiled to WebAssembly.
+                          </p>
+
+                          <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-lg mt-3 text-[10px] flex justify-between items-center">
+                            <span className="text-slate-500">ACTIVE WFST STATE:</span>
+                            <span className={`font-bold px-2 py-0.5 rounded text-[9.5px] ${gestureRecognized === "CONFIRM" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : gestureRecognized === "CANCEL" ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-slate-950 text-slate-500 border border-slate-850"}`}>
+                              {gestureRecognized === "NONE" ? "WAITING_POSE_A" : gestureRecognized}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-900">
+                          <button
+                            onClick={() => {
+                              setGestureRecognized("CONFIRM");
+                              addLog("MGL: Gesture 'THUMB_UP -> HOLD 300MS' matched with assurance rating of 99.4%. State [CONFIRM] dispatched to Goal-Firewall.");
+                            }}
+                            className="flex-1 bg-slate-800 hover:bg-slate-755 border border-slate-700 text-slate-300 font-sans font-bold text-[9px] h-7 px-2 rounded transition"
+                          >
+                            Thumb-Up Pose
+                          </button>
+                          <button
+                            onClick={() => {
+                              setGestureRecognized("CANCEL");
+                              addLog("MGL: Gesture 'HAND_WAVE' matched. Pipeline state [CANCEL] triggered.");
+                            }}
+                            className="flex-1 bg-slate-800 hover:bg-slate-755 border border-slate-700 text-slate-300 font-sans font-bold text-[9px] h-7 px-2 rounded transition"
+                          >
+                            Wave Hand Pose
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* LAYER 4: EXECUTION FABRIC & TRACING */}
+                {selectedKernelLayer === 4 && (
+                  <div className="space-y-4 text-[10px]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* Left: Firecracker Airlock Configuration */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3 font-mono">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">
+                          Firecracker Micro-VM Sandbox Allocation
+                        </span>
+
+                        <div className="space-y-3 font-sans">
+                          {/* CPU quota */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] font-mono">
+                              <span className="text-slate-400">GUEST VCPU EXECUTION LIMIT</span>
+                              <span className="text-emerald-400 font-bold">{sandboxCpuLimit} ms / s</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="100"
+                              max="1000"
+                              step="50"
+                              value={sandboxCpuLimit}
+                              onChange={(e) => setSandboxCpuLimit(parseInt(e.target.value))}
+                              className="w-full h-1 bg-slate-800 rounded appearance-none cursor-pointer accent-emerald-500"
+                            />
+                          </div>
+
+                          {/* RAM quota */}
+                          <div className="space-y-1 font-mono">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-slate-400">RAM MEMORY_MAX CAP (CGROUP)</span>
+                              <span className="text-emerald-400 font-bold">{sandboxRamLimit} MiB</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="128"
+                              max="1024"
+                              step="128"
+                              value={sandboxRamLimit}
+                              onChange={(e) => setSandboxRamLimit(parseInt(e.target.value))}
+                              className="w-full h-1 bg-slate-800 rounded appearance-none cursor-pointer accent-emerald-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Sandbox Boot Button */}
+                        <div className="pt-2 border-t border-slate-900 flex justify-between items-center font-mono">
+                          <span className="text-[9.5px] text-slate-500 font-bold">STATE: <span className={vmActive ? "text-emerald-400 animate-pulse font-bold" : "text-slate-600 font-bold"}>{vmActive ? "AIR-LOCK RUNNING" : "TERMINATED"}</span></span>
+                          <button
+                            onClick={() => {
+                              if (vmActive) {
+                                setVmActive(false);
+                                addLog("Firecracker MicroVM guest guest-os context destroyed. Reclaiming network namespaces.");
+                              } else {
+                                setVmActive(true);
+                                addLog(`Initiating Firecracker Micro-VM boot [Sandbox Level 2]...`);
+                                addLog(`Cmapping kernel resource limits: vCPU quota=${sandboxCpuLimit}ms/s, RAM limit=${sandboxRamLimit}MiB.`);
+                                addLog(`Mounting OverlayFS secure isolated rootfs in read-only lower layers.`);
+                                addLog(`Guest boot successfully in 12.8ms. eBPF trace hooks connected to syscall vectors.`);
+                                
+                                // Generate mock tracing events
+                                const newSys = [
+                                  { pid: 2190, comm: "solomon-guest", syscall: "sys_execve", latency_ns: 1250 },
+                                  { pid: 2190, comm: "solomon-guest", syscall: "sys_openat", latency_ns: 320 },
+                                  { pid: 2191, comm: "cargo", syscall: "sys_mmap", latency_ns: 840 },
+                                  { pid: 2191, comm: "rustc", syscall: "sys_write", latency_ns: 90 }
+                                ];
+                                setEbpfSyscalls(newSys);
+                              }
+                            }}
+                            className={`rounded px-3 text-[10px] h-7 font-sans font-bold transition ${vmActive ? "bg-red-700 hover:bg-red-650 text-white" : "bg-emerald-600 hover:bg-emerald-500 text-white"}`}
+                          >
+                            {vmActive ? "Dismantle VM" : "Boot Guest Sandbox"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: eBPF Execution Traces */}
+                      <div className="bg-slate-950/60 border border-slate-900 p-3.5 rounded-lg space-y-3 font-mono">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">
+                          eBPF Kernel Trace Streams (Filtered: sandbox root)
+                        </span>
+
+                        <div className="space-y-1.5 max-h-[140px] overflow-y-auto font-mono text-[8px]">
+                          {ebpfSyscalls.map((sys, idx) => (
+                            <div key={idx} className="p-1 px-1.5 bg-slate-950 border border-slate-900 rounded text-slate-400 flex justify-between items-center hover:bg-slate-900/60 transition">
+                              <span className="text-amber-400 font-bold">PID {sys.pid}</span>
+                              <span className="text-slate-300 font-bold truncate max-w-[80px]">{sys.comm}</span>
+                              <span className="text-emerald-400 font-bold truncate max-w-[100px]">{sys.syscall}</span>
+                              <span className="text-slate-500 font-sans">{sys.latency_ns} ns</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex justify-end pt-1">
+                          <button
+                            onClick={() => {
+                              const extra = [
+                                { pid: 2200 + Math.round(Math.random() * 50), comm: "git", syscall: "sys_clone", latency_ns: 2450 },
+                                { pid: 2200 + Math.round(Math.random() * 50), comm: "gcc", syscall: "sys_openat", latency_ns: 410 },
+                                { pid: 1408, comm: "solomon-daemon", syscall: "sys_epoll_wait", latency_ns: 120 }
+                              ];
+                              setEbpfSyscalls(prev => [extra[Math.floor(Math.random() * extra.length)], ...prev]);
+                            }}
+                            className="bg-slate-800 hover:bg-slate-755 border border-slate-700 text-slate-300 font-sans font-bold text-[9px] h-6 px-2.5 rounded transition"
+                          >
+                            Trigger syscall
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+              </div>
             </div>
           )}
 
