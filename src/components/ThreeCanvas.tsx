@@ -986,10 +986,10 @@ export default function ThreeCanvas({
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 4.0));
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x02010c, 1.0);
+    renderer.setClearColor(0x000000, 1.0); // Absolute pure OLED black base
 
     // ─── PART 2: LIGHTING ─────────────────────────────────
-    const ambientLight = new THREE.AmbientLight(0x15122e, 1.5);
+    const ambientLight = new THREE.AmbientLight(0x080718, 0.85); // High-contrast, deeply moody dark-room ambient key
     scene.add(ambientLight);
 
     const pointLight1 = new THREE.PointLight(0xff9900, 3.5, 300);
@@ -1019,7 +1019,7 @@ export default function ThreeCanvas({
       }
 
       vec3 sampleNebula(vec2 uv, float time) {
-        vec3 base = vec3(0.006, 0.003, 0.02);
+        vec3 base = vec3(0.000, 0.000, 0.000); // Perfect native pure OLED absolute black backing
         vec3 acc = vec3(0.0);
         
         vec2 c[4];
@@ -1029,18 +1029,18 @@ export default function ThreeCanvas({
         c[3] = vec2(0.3, 0.82) + vec2(cos(time * 0.06) * 0.05, sin(time * 0.08) * 0.05);
 
         vec3 col[4];
-        col[0] = vec3(0.18, 0.03, 0.42); // deep violet
-        col[1] = vec3(0.00, 0.12, 0.38); // space blue
-        col[2] = vec3(0.36, 0.05, 0.12); // cosmic red
-        col[3] = vec3(0.02, 0.18, 0.22); // space teal
+        col[0] = vec3(0.08, 0.015, 0.22); // Deep rich violet gas glow
+        col[1] = vec3(0.00, 0.04, 0.18);  // Deep space indigo/blue gas glow
+        col[2] = vec3(0.18, 0.01, 0.04);  // Pure blood red ruby filament
+        col[3] = vec3(0.01, 0.08, 0.10);  // Deep dark space teal dust cloud
 
-        float op[4] = float[](0.42, 0.38, 0.32, 0.30);
+        float op[4] = float[](0.28, 0.24, 0.20, 0.18); // Highly optimized lower opacities for organic smoke detail
         float ps[4] = float[](0.18, 0.12, 0.22, 0.15);
 
         for(int i = 0; i < 4; i++) {
           float d = length(uv - c[i]);
           float f = 1.0 - smoothstep(0.0, 0.95, d);
-          f = wash_pow(f, 3.4);
+          f = wash_pow(f, 3.8); // Steeper curve to keep bounds incredibly clean and ink black
           float pulse = 0.85 + 0.15 * sin(time * ps[i] + float(i) * 1.5);
           acc += col[i] * op[i] * f * pulse;
         }
@@ -2221,8 +2221,8 @@ export default function ThreeCanvas({
       );
 
       // ─── DYNAMIC BLOOM PASS ADAPTATION BASED ON SELECTION & CALIBRATION ───
-      const targetBloomRadius = isAgentActive ? 1.25 : 0.65;
-      bloomPass.intensity = THREE.MathUtils.lerp(bloomPass.intensity, (isAgentActive ? 2.35 : 1.15) * bloomIntensityRef.current, 5.0 * delta);
+      const targetBloomRadius = isAgentActive ? 1.0 : 0.5;
+      bloomPass.intensity = THREE.MathUtils.lerp(bloomPass.intensity, (isAgentActive ? 0.95 : 0.42) * bloomIntensityRef.current, 5.0 * delta);
       bloomPass.threshold = bloomThresholdRef.current;
 
       // Shift workspace ambient/point lights and core material colors towards agent accent color when active
