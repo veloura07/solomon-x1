@@ -819,17 +819,39 @@ const ringFragShader = `
     // Ambient cosmic reflection combined with agent's individual accent colors
     vec3 envReflection = (vec3(0.08, 0.05, 0.22) * waveX + vec3(0.18, 0.26, 0.75) * waveY + uAccentColor * waveZ) * 1.3;
     
-    // Fresnel Thin-Film Iridescent Shading (shifts colors on grazing angles like luxurious obsidian/pearl)
+    // Upgrade: Real metallic Fresnel reflection (Schlick's approximation) with extreme chromatic light refraction
     float cosTheta = max(0.0, dot(perturbedNormal, V));
-    float fresnel = pow(1.0 - cosTheta, 3.8);
-    vec3 iridescentSpectrum = vec3(
-      0.5 + 0.5 * sin(fresnel * 4.5 + uTime * 0.3),
-      0.4 + 0.6 * sin(fresnel * 4.5 + uTime * 0.25 + 2.09),
-      0.6 + 0.4 * sin(fresnel * 4.5 + uTime * 0.2 + 4.18)
-    );
+    float grazeShift = 0.08 * (1.0 - cosTheta); // Metallic grazing refraction dispersion
     
-    // Blend environmental reflection and iridescent coating via Fresnel factor
-    vec3 coatingReflection = mix(envReflection * 0.3, envReflection * 1.5 + iridescentSpectrum * uAccentColor * 0.8, fresnel);
+    // Spectral-shifted F0 base reflectance vectors representing high-fidelity golden-silver metallurgy
+    vec3 F0_red = mix(vec3(0.04), alloyColor * 1.4, metallic);
+    vec3 F0_grn = mix(vec3(0.04), alloyColor * 1.25, metallic);
+    vec3 F0_blu = mix(vec3(0.04), alloyColor * 1.1, metallic);
+
+    // Compute chromatic Fresnel refractance at extreme angles
+    float fresnelR = pow(max(0.0, 1.0 - (cosTheta + grazeShift)), 5.0);
+    float fresnelG = pow(max(0.0, 1.0 - cosTheta), 5.0);
+    float fresnelB = pow(max(0.0, 1.0 - (cosTheta - grazeShift)), 5.0);
+
+    vec3 F_schlick = vec3(
+      F0_red.r + (1.0 - F0_red.r) * fresnelR,
+      F0_grn.g + (1.0 - F0_grn.g) * fresnelG,
+      F0_blu.b + (1.0 - F0_blu.b) * fresnelB
+    );
+
+    // Iridescent spectrum based on chromatic Fresnel phase shift
+    float fresnelAvg = (fresnelR + fresnelG + fresnelB) / 3.0;
+    vec3 iridescentSpectrum = vec3(
+      0.5 + 0.5 * sin(fresnelAvg * 6.28 + uTime * 0.35),
+      0.4 + 0.6 * sin(fresnelAvg * 6.28 + uTime * 0.28 + 2.09),
+      0.6 + 0.4 * sin(fresnelAvg * 6.28 + uTime * 0.22 + 4.18)
+    );
+
+    // Blend environmental reflection with iridescent coating using the physically computed metallic Fresnel vector F_schlick
+    vec3 coatingReflection = mix(envReflection * 0.35, envReflection * 2.3 + iridescentSpectrum * uAccentColor * 1.2, F_schlick);
+    
+    // Smoothly blend the fresnel variable for standard ambient layer subtraction as well
+    float fresnel = fresnelAvg;
     
     // Emissive glowing patterns (e.g. glowing digital circuit or gold runic engravings)
     float activePulse = uPulseIntensity * (0.9 + 0.2 * sin(uTime * 3.5));
@@ -1705,6 +1727,7 @@ export default function ThreeCanvas({
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let hoveredRingIndex = -1;
+    let isCoreHovered = false;
 
     const handleCanvasClick = (event: MouseEvent) => {
       // Safeguard: only trigger canvas operations if the click was directly on the WebGL canvas element
@@ -1733,6 +1756,10 @@ export default function ThreeCanvas({
           }
         }
       });
+
+      // Check intersection with central core sigil group
+      const coreIntersects = raycaster.intersectObjects(sigilGroup.children, true);
+      const clickedCore = coreIntersects.length > 0;
 
       if (closestRingIndex !== -1) {
         onSelectRing(closestRingIndex);
@@ -1764,8 +1791,20 @@ export default function ThreeCanvas({
           }
         });
       } else {
-        // Recenter to global senate overview when clicking on empty background space of the canvas
-        onSelectRing(-1);
+        if (clickedCore) {
+          // Clicked on the core: reset to senate overview and give the gyros an amazing spin boost!
+          onSelectRing(-1);
+          gyroRings.forEach((ring, index) => {
+            gsap.killTweensOf(ring.rotation);
+            gsap.fromTo(ring.rotation, 
+              { z: ring.rotation.z },
+              { z: ring.rotation.z + Math.PI * (index % 2 === 0 ? 6.0 : -6.0), duration: 2.2, ease: "power3.out" }
+            );
+          });
+        } else {
+          // Recenter to global senate overview when clicking on empty background space of the canvas
+          onSelectRing(-1);
+        }
       }
     };
 
@@ -1782,6 +1821,10 @@ export default function ThreeCanvas({
       parallax.y = mouse.y;
 
       raycaster.setFromCamera(mouse, camera);
+
+      // Check intersection with central core sigil group to determine if core is focused
+      const sigilIntersects = raycaster.intersectObjects(sigilGroup.children, true);
+      isCoreHovered = sigilIntersects.length > 0;
 
       let closestRingIndex = -1;
       let minDistance = Infinity;
@@ -2476,20 +2519,48 @@ export default function ThreeCanvas({
       trailGeo.attributes.size.needsUpdate = true;
 
       // ─── DYNAMIC DEPTH OF FIELD (DoF) FOCUS AND BLUR INTERPOLATION ───
-      if (isAgentActive) {
-        const focusedRing = physicalRings.find((pr) => pr.index === activeIdx);
-        if (focusedRing) {
-          const tempV = new THREE.Vector3();
-          focusedRing.group.getWorldPosition(tempV);
-          tempV.project(camera);
-          
-          const focusX = (tempV.x * 0.5) + 0.5;
-          const focusY = (tempV.y * 0.5) + 0.5;
-          dofPass.uniforms.uFocusPoint.value.set(focusX, focusY);
+      let targetFocusPos: THREE.Vector3 | null = null;
+      let focusRangeTarget = 0.38;
+
+      if (hoveredRingIndex !== -1) {
+        const hRing = physicalRings.find((pr) => pr.index === hoveredRingIndex);
+        if (hRing) {
+          targetFocusPos = new THREE.Vector3();
+          hRing.group.getWorldPosition(targetFocusPos);
+          focusRangeTarget = 0.32; // Tighter focus circle on hovered ring
         }
+      } else if (isAgentActive) {
+        const aRing = physicalRings.find((pr) => pr.index === activeIdx);
+        if (aRing) {
+          targetFocusPos = new THREE.Vector3();
+          aRing.group.getWorldPosition(targetFocusPos);
+          focusRangeTarget = 0.28; // Very sharp focus on the selected active agent
+        }
+      } else {
+        // Focusing on the central core or when hovering the core
+        targetFocusPos = new THREE.Vector3(0, 0, 0);
+        focusRangeTarget = isCoreHovered ? 0.20 : 0.26; // Blurs background rings even more when hover-focusing core
       }
 
-      const targetDofEnabled = isAgentActive ? 1.0 : 0.0;
+      let focusTargetX = 0.5;
+      let focusTargetY = 0.5;
+
+      if (targetFocusPos) {
+        const tempV = targetFocusPos.clone();
+        tempV.project(camera);
+        focusTargetX = (tempV.x * 0.5) + 0.5;
+        focusTargetY = (tempV.y * 0.5) + 0.5;
+      }
+
+      // Smoothly LERP focus point coordinates to prevent cinematic jumps
+      dofPass.uniforms.uFocusPoint.value.x = THREE.MathUtils.lerp(dofPass.uniforms.uFocusPoint.value.x, focusTargetX, 8.0 * delta);
+      dofPass.uniforms.uFocusPoint.value.y = THREE.MathUtils.lerp(dofPass.uniforms.uFocusPoint.value.y, focusTargetY, 8.0 * delta);
+
+      // Smoothly LERP focus region size for dynamic focus breathing
+      dofPass.uniforms.uFocusRange.value = THREE.MathUtils.lerp(dofPass.uniforms.uFocusRange.value, focusRangeTarget, 5.0 * delta);
+
+      // Heighten the OLED cinematic feel with a persistent yet responsive depth blur
+      const targetDofEnabled = 1.0;
       dofPass.uniforms.uEnabled.value = THREE.MathUtils.lerp(
         dofPass.uniforms.uEnabled.value,
         targetDofEnabled,
