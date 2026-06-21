@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SOLOMON — WebSocket Bridge (solomon-ws.js)
 
-   Manages the persistent connection to the Node.js backend.
+   Manages the persistent connection to brain.py (ws://localhost:8765).
    Exposes window.solomonWS as the single surface the rest of the frontend
    uses to interact with the AI backend.
 
@@ -17,9 +17,8 @@
 (function () {
   'use strict';
 
-  // Dynamic WebSocket URL that auto-configures to the hosting environments
-  var WS_URL           = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
-  var RECONNECT_DELAY  = 2000;  // ms before retrying a dropped connection
+  var WS_URL           = 'ws://localhost:8765';
+  var RECONNECT_DELAY  = RECONNECT_DELAY || 2000;  // ms before retrying a dropped connection
   var reconnectTimeout = null;
 
   // ── Ring ID map ── index matches RING_DATA order in phase3.js ────────────
@@ -58,40 +57,13 @@
 
       ws.onopen = function () {
         window.solomonWS.isConnected = true;
-        console.log('[solomon-ws] Connected to backend at ' + WS_URL);
-
-        // Update 3D avatar scene to Idle on successful connections
+        console.log('[solomon-ws] Connected to brain.py at ' + WS_URL);
+        
+        // Optimize: trigger UI state change cleanly on open
         if (typeof window.solomonSetAvatarState === 'function') {
           window.solomonSetAvatarState('idle');
         }
-
-        // Send ephemeral auth handshake immediately after connect.
-        (function sendHandshake() {
-          try {
-            var token = window.solomonNative && window.solomonNative.getAuthToken ? window.solomonNative.getAuthToken() : null;
-            if (token) {
-              window.solomonWS.send('handshake', { token: token });
-            } else {
-              // Retry for a short period in case the preload hasn't received the token yet
-              var attempts = 0;
-              var interval = setInterval(function () {
-                attempts += 1;
-                token = window.solomonNative && window.solomonNative.getAuthToken ? window.solomonNative.getAuthToken() : null;
-                if (token) {
-                  clearInterval(interval);
-                  window.solomonWS.send('handshake', { token: token });
-                } else if (attempts >= 10) {
-                   clearInterval(interval);
-                   console.log('[solomon-ws] Default handshake bypass for preview environment.');
-                   window.solomonWS.send('handshake', { token: 'bypass' });
-                }
-              }, 100);
-            }
-          } catch (e) {
-            console.warn('[solomon-ws] Handshake send error:', e);
-          }
-        })();
-
+        
         window.solomonWS.onConnected();
       };
 
@@ -107,7 +79,7 @@
         var event = data.event;
 
         if (event === 'token_stream') {
-          // Pulse the 3D avatar core dynamically with incoming tokens
+          // Optimize: trigger live dynamic pulsing
           if (typeof window.solomonPulseAvatarToken === 'function') {
             window.solomonPulseAvatarToken();
           }
@@ -120,12 +92,11 @@
           } else {
             window.solomonWS.isGenerating = false;
           }
-
-          // Map operational status to visual animation and speed configurations
+          
           if (typeof window.solomonSetAvatarState === 'function') {
             window.solomonSetAvatarState(data.state);
           }
-
+          
           window.solomonWS.onStatus(data.state);
 
         } else if (event === 'ring_config') {
@@ -134,13 +105,16 @@
         } else if (event === 'models') {
           window.solomonWS.onModels(data.list);
 
+        } else if (event === 'emotion_update') {
+          window.solomonWS.onEmotion(data.ring_id, data.valence, data.arousal);
+
         } else if (event === 'error') {
           console.error('[solomon-ws] Backend error:', data.message);
           
           if (typeof window.solomonSetAvatarState === 'function') {
             window.solomonSetAvatarState('error');
           }
-
+          
           window.solomonWS.onError(data.message);
         }
       };
@@ -154,7 +128,6 @@
         window.solomonWS.isGenerating = false;
         console.log('[solomon-ws] Connection closed. Reconnecting in ' + (RECONNECT_DELAY / 1000) + 's...');
 
-        // Transition the 3D core avatar to 'offline' state
         if (typeof window.solomonSetAvatarState === 'function') {
           window.solomonSetAvatarState('offline');
         }
@@ -169,7 +142,7 @@
       };
     },
 
-    // ── Send a structured event to backend ───────────────────────────────
+    // ── Send a structured event to brain.py ───────────────────────────────
     send: function (event, payload) {
       if (!window.solomonWS.socket || window.solomonWS.socket.readyState !== WebSocket.OPEN) {
         console.warn('[solomon-ws] Cannot send — socket not open. Event:', event);
@@ -199,6 +172,10 @@
 
     onModels: function (modelList) {
       // Default no-op — available for a future settings UI
+    },
+
+    onEmotion: function (ringId, valence, arousal) {
+      // Default no-op — overridden by warp.js to drive the avatar tint
     },
 
     onError: function (message) {
