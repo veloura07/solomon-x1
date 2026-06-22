@@ -350,7 +350,6 @@ export default function App() {
       setWsStatus('connecting');
       
       const wsUrl = (import.meta as any).env?.VITE_SOLOMON_WS_URL || "ws://localhost:8765";
-      console.log(`[SolomonOS] Unsealing secure socket channel: ${wsUrl}`);
       
       try {
         const socket = new WebSocket(wsUrl);
@@ -367,7 +366,6 @@ export default function App() {
         socket.onopen = () => {
           clearTimeout(connectionTimeout);
           if (!isActive) return;
-          console.log("[SolomonOS] Cognitive link established successfully via WebSocket.");
           setWsConnected(true);
           setWsStatus('connected');
           setWsFailedNotify(false);
@@ -386,7 +384,6 @@ export default function App() {
           if (!isActive) return;
           try {
             const dataJSON = JSON.parse(event.data);
-            console.log("[SolomonOS] Live frame telemetry package inbound:", dataJSON);
             
             if (dataJSON.event === "status") {
               handleAddAuditLog({
