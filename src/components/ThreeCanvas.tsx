@@ -2614,13 +2614,14 @@ export default function ThreeCanvas({
       const sizeArr = trailGeo.attributes.size.array as Float32Array;
 
       let traceCount = 0;
+      let nextIdx = activeTrails.length - 1;
+
       for (let i = activeTrails.length - 1; i >= 0; i--) {
         const pt = activeTrails[i];
         pt.age += delta;
 
-        // splicing if old
+        // filter out old particles without splicing O(N^2) overhead
         if (pt.age >= pt.maxAge) {
-          activeTrails.splice(i, 1);
           continue;
         }
 
@@ -2654,7 +2655,16 @@ export default function ThreeCanvas({
             traceCount++;
           }
         }
+
+        activeTrails[nextIdx--] = pt;
       }
+
+      // Shift elements to the front
+      const validCount = activeTrails.length - 1 - nextIdx;
+      for (let i = 0; i < validCount; i++) {
+        activeTrails[i] = activeTrails[nextIdx + 1 + i];
+      }
+      activeTrails.length = validCount;
 
       // Zero-out remaining particles
       for (let i = traceCount; i < MAX_TRAIL_PARTICLES; i++) {
