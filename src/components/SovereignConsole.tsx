@@ -1,23 +1,16 @@
 import { useState, useEffect } from "react";
 import { 
   Terminal, 
-  ShieldAlert, 
-  Layers, 
   Database, 
-  Cpu, 
   Coins, 
   Sliders, 
   ShieldCheck, 
   Server, 
-  AlertCircle, 
   Play, 
   TrendingUp, 
   Anchor, 
   Lock, 
-  Workflow,
-  Check,
-  RefreshCw,
-  Gauge
+  RefreshCw
 } from "lucide-react";
 import { MemoryItem, AuditLog, AgentSpec } from "../types";
 
