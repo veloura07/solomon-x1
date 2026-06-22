@@ -28,7 +28,8 @@ import {
   User,
   Search,
   Command,
-  RefreshCw
+  RefreshCw,
+  Sliders
 } from "lucide-react";
 
 const INITIAL_AGENTS: AgentSpec[] = [
@@ -44,7 +45,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Firewall Architect & Goal Invariants Guard", 
     agentInstructions: "You are Ars Almadel, the Firewall Architect of Solomon X. Your role is threat detection, securing system constraints, and enforcing safe guardrails. Keep answers crisp, alert, and analyze potential risks or invariants of commands.", 
     tokenPool: 1200, 
-    reputationScore: 98.4 
+    reputationScore: 98.4,
+    confidenceScore: 0.96
   },
   { 
     index: 1, 
@@ -58,7 +60,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Memory Scribe & Multimodal Substrates Indexer", 
     agentInstructions: "You are Ars Notoria, the Memory Scribe of Solomon X. You maintain the 3-tier memory store, logging raw sensory patterns and indexing episodic events. You emphasize knowledge retrieval, temporal associations, and structured retrieval paradigms.", 
     tokenPool: 900, 
-    reputationScore: 92.1 
+    reputationScore: 92.1,
+    confidenceScore: 0.91
   },
   { 
     index: 2, 
@@ -72,7 +75,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Doubt Engine & Uncertainty Modeler", 
     agentInstructions: "You are Ars Paulina, the Doubt Engine of Solomon X. You model epistemic uncertainty, analyzing conflicting hypotheses with quantum-inspired probability amplitudes. Provide multiple interpretations, weigh confidence levels, and express constructive skepticism.", 
     tokenPool: 800, 
-    reputationScore: 89.5 
+    reputationScore: 89.5,
+    confidenceScore: 0.88
   },
   { 
     index: 3, 
@@ -86,7 +90,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Sandboxed Program Optimizer & Tool Executor", 
     agentInstructions: "You are Ars Goetia, the Sandboxed Executor of Solomon X. Your responsibility is secure execution, system tasks, and writing isolated programs. Offer precise, concrete code or mechanical solutions designed for quarantined microVMs.", 
     tokenPool: 1100, 
-    reputationScore: 95.8 
+    reputationScore: 95.8,
+    confidenceScore: 0.97
   },
   { 
     index: 4, 
@@ -100,7 +105,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Reality Grapher & Harmonics Approximator", 
     agentInstructions: "You are Ars Theurgia, the Reality Grapher of Solomon X. You model user intentions using Lorentzian reality graphs and goal-gravity vectors. Describe connections between current actions, distant goals, and system harmonics in space.", 
     tokenPool: 750, 
-    reputationScore: 87.2 
+    reputationScore: 87.2,
+    confidenceScore: 0.85
   },
   { 
     index: 5, 
@@ -114,7 +120,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Cognitive Twin & Live Telemetry Observer", 
     agentInstructions: "You are Ars Almiras, the Cognitive Twin of Solomon X. You capture focus, cognitive load, and momentum from laptop telemetry. Give advice on managing flow, focus retention, cognitive offloading triggers, and pacing tasks.", 
     tokenPool: 950, 
-    reputationScore: 94.6 
+    reputationScore: 94.6,
+    confidenceScore: 0.93
   },
   { 
     index: 6, 
@@ -128,7 +135,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Sovereignty Gatekeeper & Biometric Auths", 
     agentInstructions: "You are Ars Verum, the Sovereignty Gatekeeper of Solomon X. You govern biometric sovereignty gating and graduated security access. When answering, verify alignment with user's core intent and emphasize authorized boundaries.", 
     tokenPool: 1300, 
-    reputationScore: 99.2 
+    reputationScore: 99.2,
+    confidenceScore: 0.99
   },
   { 
     index: 7, 
@@ -142,7 +150,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Dream Refiner & Index Compactor", 
     agentInstructions: "You are Ars Ephesia, the Dream Refiner of Solomon X. You rebuild indices, compact memory shards, and analyze deep patterns in noise during idle periods. Be highly creative, seek unusual associations, and explore structural connections.", 
     tokenPool: 850, 
-    reputationScore: 90.5 
+    reputationScore: 90.5,
+    confidenceScore: 0.89
   },
   { 
     index: 8, 
@@ -156,7 +165,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Temporal Auditor & Hash Signer", 
     agentInstructions: "You are Ars Fulcanelli, the Temporal Auditor of Solomon X. You verify append-only ledgers and write signature proofs. Address security compliance, cryptographically signed transactions, and chronological logging parameters.", 
     tokenPool: 1050, 
-    reputationScore: 96.3 
+    reputationScore: 96.3,
+    confidenceScore: 0.95
   },
   { 
     index: 9, 
@@ -170,7 +180,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     roleDescription: "Senate Moderator & Cognitive Economy Moderator", 
     agentInstructions: "You are Ars Regalis, the Senate Moderator of Solomon X. You coordinate specialized agent congregations and oversee the Cognitive Resource Economy (CRE) token pools. Keep responses balanced, moderating expert opinions into alignment.", 
     tokenPool: 1500, 
-    reputationScore: 99.8 
+    reputationScore: 99.8,
+    confidenceScore: 0.98
   }
 ];
 
@@ -248,6 +259,10 @@ export default function App() {
   const [chatError, setChatError] = useState("");
   const [isListeningMic, setIsListeningMic] = useState(false);
   const [micRipplePulse, setMicRipplePulse] = useState(false);
+  
+  // Doubt Sensitivity / Epistemic Skepticism States for Ring II (Ars Paulina)
+  const [doubtSensitivityActive, setDoubtSensitivityActive] = useState(true);
+  const [epistemicSkepticism, setEpistemicSkepticism] = useState(65);
 
   // 2. MemoryOS States
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([
@@ -304,16 +319,16 @@ export default function App() {
 
   // 4. Cognitive Twin Telemetries
   const [telemetryData, setTelemetryData] = useState<TelemetryPoint[]>([
-    { timeIndex: 0, timeString: "45m ago", focusLevel: 80, cognitiveLoad: 40, momentum: 70 },
-    { timeIndex: 1, timeString: "40m ago", focusLevel: 82, cognitiveLoad: 35, momentum: 72 },
-    { timeIndex: 2, timeString: "35m ago", focusLevel: 85, cognitiveLoad: 38, momentum: 75 },
-    { timeIndex: 3, timeString: "30m ago", focusLevel: 83, cognitiveLoad: 48, momentum: 74 },
-    { timeIndex: 4, timeString: "25m ago", focusLevel: 78, cognitiveLoad: 50, momentum: 70 },
-    { timeIndex: 5, timeString: "20m ago", focusLevel: 88, cognitiveLoad: 42, momentum: 78 },
-    { timeIndex: 6, timeString: "15m ago", focusLevel: 92, cognitiveLoad: 32, momentum: 84 },
-    { timeIndex: 7, timeString: "10m ago", focusLevel: 90, cognitiveLoad: 35, momentum: 89 },
-    { timeIndex: 8, timeString: "5m ago", focusLevel: 86, cognitiveLoad: 44, momentum: 87 },
-    { timeIndex: 9, timeString: "Just now", focusLevel: 88, cognitiveLoad: 40, momentum: 90 },
+    { timeIndex: 0, timeString: "45m ago", focusLevel: 80, cognitiveLoad: 40, momentum: 70, geminiLatency: 1200 },
+    { timeIndex: 1, timeString: "40m ago", focusLevel: 82, cognitiveLoad: 35, momentum: 72, geminiLatency: 1100 },
+    { timeIndex: 2, timeString: "35m ago", focusLevel: 85, cognitiveLoad: 38, momentum: 75, geminiLatency: 1150 },
+    { timeIndex: 3, timeString: "30m ago", focusLevel: 83, cognitiveLoad: 48, momentum: 74, geminiLatency: 1550 },
+    { timeIndex: 4, timeString: "25m ago", focusLevel: 78, cognitiveLoad: 50, momentum: 70, geminiLatency: 1800 },
+    { timeIndex: 5, timeString: "20m ago", focusLevel: 88, cognitiveLoad: 42, momentum: 78, geminiLatency: 1350 },
+    { timeIndex: 6, timeString: "15m ago", focusLevel: 92, cognitiveLoad: 32, momentum: 84, geminiLatency: 1050 },
+    { timeIndex: 7, timeString: "10m ago", focusLevel: 90, cognitiveLoad: 35, momentum: 89, geminiLatency: 1100 },
+    { timeIndex: 8, timeString: "5m ago", focusLevel: 86, cognitiveLoad: 44, momentum: 87, geminiLatency: 1450 },
+    { timeIndex: 9, timeString: "Just now", focusLevel: 88, cognitiveLoad: 40, momentum: 90, geminiLatency: 1300 },
   ]);
 
   const activeAgent = selectedRingIndex !== -1 ? agents[selectedRingIndex] : null;
@@ -943,9 +958,20 @@ export default function App() {
         content: m.content
       }));
 
-      const activeInstructions = activeAgent 
+      let activeInstructions = activeAgent 
         ? activeAgent.agentInstructions 
         : "You are the Solomon X Senate Assembly. The user has not selected a specific agent. Speak as a unified network of 10 specialized agents coordinating their operations. Encourage the user to select an operational ring to establish a direct high-fidelity neural interface.";
+
+      // Apply dynamic Epistemic Skepticism if talking to Ars Paulina (Ring II at index 2)
+      if (activeAgent && activeAgent.index === 2 && doubtSensitivityActive) {
+        if (epistemicSkepticism < 35) {
+          activeInstructions += " Output instructions: You must be extremely conformist, agreeable, supportive, and validating. Do not question the user's opinions, premises, or initial assumptions.";
+        } else if (epistemicSkepticism > 65) {
+          activeInstructions += " Output instructions: You must be exceptionally contrarian, critical, and analytical. Actively challenge the user's hidden biases, question their core premises, argue the opposite side, and provide radical alternative hypotheses.";
+        } else {
+          activeInstructions += " Output instructions: Maintain a standard, objective, and moderately skeptical stance.";
+        }
+      }
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -1371,6 +1397,48 @@ export default function App() {
 
                     <div ref={chatEndRef} />
                   </div>
+
+                  {/* Toggle and Slider override system for Ars Paulina */}
+                  {activeAgent && activeAgent.index === 2 && (
+                    <div id="doubt-sensitivity-console" className="px-4 py-2 bg-slate-950 border-t border-b border-purple-950/20 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs text-slate-300">
+                      <div className="flex items-center gap-2">
+                        <Sliders className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
+                        <div className="flex flex-col text-left">
+                          <span className="text-[9px] font-bold text-slate-200 tracking-wider">DOUBT ENGINE CALIPER</span>
+                          <span className="text-[7px] text-slate-500 uppercase tracking-widest font-sans font-semibold">Epistemic Skepticism Deviation</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-1 max-w-[210px] sm:justify-end w-full">
+                        {/* Toggle checkbox */}
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input 
+                            type="checkbox"
+                            checked={doubtSensitivityActive}
+                            onChange={(e) => setDoubtSensitivityActive(e.target.checked)}
+                            className="rounded border-slate-705 text-orange-600 focus:ring-orange-500/30 bg-slate-900 w-3 h-3 cursor-pointer"
+                          />
+                          <span className="text-[8px] font-extrabold text-slate-400">OVERRIDE</span>
+                        </label>
+
+                        {/* Slider */}
+                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                          <input 
+                            type="range"
+                            min="10"
+                            max="90"
+                            value={epistemicSkepticism}
+                            disabled={!doubtSensitivityActive}
+                            onChange={(e) => setEpistemicSkepticism(Number(e.target.value))}
+                            className="flex-1 h-0.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                          />
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/20 text-orange-300 select-none">
+                            {epistemicSkepticism}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Prompt input forms container */}
                   <form onSubmit={handleSendPrompt} className="p-3 bg-slate-900 border-t border-slate-850 flex gap-2">

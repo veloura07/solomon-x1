@@ -1583,6 +1583,8 @@ export default function ThreeCanvas({
         hoverScale: number;
         hoverIntensity: number;
         pulseIntensity: number;
+        resonanceScale?: number;
+        resonanceRot?: number;
       };
       rotVelocity: { x: number; y: number; z: number };
       springStrengthFactor: number;
@@ -1836,6 +1838,8 @@ export default function ThreeCanvas({
           hoverScale: 1.0,
           hoverIntensity: 0.0,
           pulseIntensity: spec.index === selectedIndexRef.current ? 1.6 : 1.0,
+          resonanceScale: 1.0,
+          resonanceRot: 0.0,
         },
         rotVelocity: {
           x: (Math.random() - 0.5) * 0.15,
@@ -2516,7 +2520,39 @@ export default function ThreeCanvas({
       if (activeIdx !== prevActiveIdx) {
         prevActiveIdx = activeIdx;
 
+        // Reset neural resonance on all rings
+        physicalRings.forEach(pr => {
+          gsap.killTweensOf(pr.animState, "resonanceScale");
+          gsap.killTweensOf(pr.animState, "resonanceRot");
+          pr.animState.resonanceScale = 1.0;
+          pr.animState.resonanceRot = 0.0;
+        });
+
         if (activeIdx !== -1) {
+          // Check if active agent confidence exceeds 95%
+          const activeAgentSpec = agentsRef.current.find((ag) => ag.index === activeIdx);
+          if (activeAgentSpec && (activeAgentSpec.confidenceScore > 0.95 || activeAgentSpec.reputationScore > 95)) {
+            const activeRing = physicalRings.find(r => r.index === activeIdx);
+            if (activeRing) {
+              // Trigger gentle GSAP "Neural Resonance" scale vibration (breathing)
+              gsap.to(activeRing.animState, {
+                resonanceScale: 1.15,
+                duration: 2.2,
+                repeat: -1,
+                yoyo: true,
+                ease: "sine.inOut"
+              });
+
+              // Trigger gentle GSAP "Neural Resonance" smooth spin
+              gsap.to(activeRing.animState, {
+                resonanceRot: Math.PI * 2,
+                duration: 8.0,
+                repeat: -1,
+                ease: "none"
+              });
+            }
+          }
+
           // 1. Bloom flare explosion: spike bloom pass to represent heavy unsealing power coupling
           bloomIntensityRef.current = 4.8;
           gsap.killTweensOf(bloomIntensityRef);
@@ -2786,9 +2822,16 @@ export default function ThreeCanvas({
         }
         pr.group.position.lerp(tempTargetPos, 7.0 * delta);
         
-        // Compute base and hover-multipled GSAP scale
-        const scaleVal = pr.animState.scale * pr.animState.hoverScale;
+        // Compute base, hover, and GSAP resonance scale
+        const resScale = pr.animState.resonanceScale !== undefined ? pr.animState.resonanceScale : 1.0;
+        const scaleVal = pr.animState.scale * pr.animState.hoverScale * resScale;
         pr.group.scale.set(scaleVal, scaleVal, scaleVal);
+
+        // Apply Neural Resonance rotational shifts
+        if (isSelected && pr.animState.resonanceRot !== undefined && pr.animState.resonanceRot > 0) {
+          pr.group.rotation.y += pr.animState.resonanceRot * delta * 0.15;
+          pr.group.rotation.x += pr.animState.resonanceRot * delta * 0.05;
+        }
 
         // Update custom shader material properties
         if (pr.bandMesh.material instanceof THREE.ShaderMaterial) {

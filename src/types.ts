@@ -41,6 +41,7 @@ export interface AgentSpec {
   agentInstructions: string;
   tokenPool: number;
   reputationScore: number;
+  confidenceScore: number;
 }
 
 export interface TelemetryPoint {
@@ -49,4 +50,5 @@ export interface TelemetryPoint {
   focusLevel: number; // 0 to 100
   cognitiveLoad: number; // 0 to 100
   momentum: number; // 0 to 100
+  geminiLatency?: number; // Response latency in ms
 }

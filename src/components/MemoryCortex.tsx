@@ -30,6 +30,31 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
   const [decaySpeed, setDecaySpeed] = useState<number>(1.0); // Simulation rapidity modifier
   const [lastCheckTime, setLastCheckTime] = useState<number>(Date.now());
 
+  interface ToastItem {
+    id: string;
+    message: string;
+    subtext: string;
+    bytesRecovered: number;
+    shardsCompacted: number;
+  }
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = (shardsCount: number, totalBytes: number) => {
+    const newToast: ToastItem = {
+      id: Math.random().toString(),
+      message: "MemoryCortex Compaction Complete",
+      subtext: `Successfully compacted ${shardsCount} decayed memory shard${shardsCount > 1 ? "s" : ""} on system registers.`,
+      bytesRecovered: totalBytes,
+      shardsCompacted: shardsCount
+    };
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== newToast.id));
+    }, 4000);
+  };
+
   // Periodically sweep and trigger re-calculation of temporal decay relative levels
   useEffect(() => {
     const sweepTimer = setInterval(() => {
@@ -72,13 +97,17 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
     .filter(shard => !shard.isCompacted && shard.relevanceScore < 75)
     .sort((a, b) => a.relevanceScore - b.relevanceScore);
 
-  const runPackShard = (item: any) => {
+  const runPackShard = (item: any, bypassToast = false) => {
     setCompactedIds(prev => [...prev, item.id]);
+    const byteSize = Math.round(item.detailedContent.length * 0.85 + 128);
     setDreamLogs(prev => [
       `VECTOR CRUCIBLE: Compacted low-relevance shard ${item.id} (${item.summary.substring(0, 24)}...) into a single vector-offset axiom.`,
-      `DECAY SHIELD: Reclaimed ~${Math.round(item.detailedContent.length * 0.85)} bytes of client VRAM. Core entropy index balanced.`,
+      `DECAY SHIELD: Reclaimed ~${byteSize} bytes of client VRAM. Core entropy index balanced.`,
       ...prev
     ]);
+    if (!bypassToast) {
+      addToast(1, byteSize);
+    }
   };
 
   // Tab selector for 9 horizons
@@ -677,7 +706,12 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
                 <button
                   type="button"
                   onClick={() => {
-                    compactionCandidates.forEach(c => runPackShard(c));
+                    let totalBytes = 0;
+                    compactionCandidates.forEach(c => {
+                      runPackShard(c, true);
+                      totalBytes += Math.round(c.detailedContent.length * 0.85 + 128);
+                    });
+                    addToast(compactionCandidates.length, totalBytes);
                   }}
                   className="w-full h-8.5 bg-slate-950 border border-slate-850 hover:border-slate-800 hover:bg-slate-900 text-purple-450 hover:text-purple-300 text-[10px] font-bold rounded-xl transition flex items-center justify-center gap-1.5 font-mono uppercase cursor-pointer"
                 >
@@ -779,6 +813,41 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
 
         </div>
       )}
+
+      {/* Floating Toast Notification Area */}
+      <div id="memory-toast-container" className="fixed bottom-6 right-6 z-[9999] space-y-3 max-w-sm pointer-events-none font-sans">
+        {toasts.map((toast) => (
+          <div 
+            key={toast.id}
+            className="bg-slate-950/95 border border-purple-500/30 text-slate-100 p-4 rounded-xl shadow-[0_4px_24px_rgba(168,85,247,0.15)] flex items-start gap-3 pointer-events-auto animate-slideInRight"
+            style={{ backdropFilter: "blur(12px)" }}
+          >
+            <div className="p-1.5 bg-purple-500/10 border border-purple-400/20 text-purple-400 rounded-lg mt-0.5">
+              <Database className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0 font-sans">
+              <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5 font-sans">
+                <span>{toast.message}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" />
+              </h4>
+              <p className="text-[10px] text-slate-400 mt-0.5 font-mono leading-relaxed">
+                {toast.subtext}
+              </p>
+              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-900 font-mono text-[9px] text-purple-350">
+                <span className="font-semibold text-purple-300">RECLAIMED:</span>
+                <span>{toast.bytesRecovered} Bytes Vector VRAM</span>
+              </div>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+              className="text-slate-500 hover:text-slate-350 transition text-xs flex-shrink-0 cursor-pointer self-start"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
 
     </div>
   );

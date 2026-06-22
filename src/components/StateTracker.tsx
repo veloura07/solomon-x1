@@ -62,12 +62,22 @@ export default function StateTracker({
         momentum = Math.max(15, Math.min(55, 30 + Math.random() * 15 - 10));
       }
 
+      let simulatedLatency = 1000;
+      if (mode === "Quiet") {
+        simulatedLatency = Math.round(400 + load * 10 + Math.random() * 200);
+      } else if (mode === "HeavyCode") {
+        simulatedLatency = Math.round(1500 + load * 22 + Math.random() * 600);
+      } else {
+        simulatedLatency = Math.round(800 + load * 12 + Math.random() * 300);
+      }
+
       baseData.push({
         timeIndex: i,
         timeString,
         focusLevel: Math.round(focus),
         cognitiveLoad: Math.round(load),
         momentum: Math.round(momentum),
+        geminiLatency: simulatedLatency,
       });
     }
 
@@ -220,87 +230,198 @@ export default function StateTracker({
         </div>
       </div>
 
-      {/* Recharts Graphical Pane */}
-      <div id="chart-panel" className="lg:col-span-8 bg-slate-950/80 border border-slate-800 rounded-2xl p-5 flex flex-col">
-        <div className="flex items-center justify-between mb-6 border-b border-slate-900 pb-3">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-purple-400" />
-            <span className="text-[11px] font-bold text-slate-300">COGNITIVE MANIFOLD SEQUENCES (30m SLIDING)</span>
+      {/* Recharts Graphical Pane Column */}
+      <div className="lg:col-span-8 space-y-6 flex flex-col">
+        {/* Main Telemetry Chart */}
+        <div id="chart-panel" className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-6 border-b border-slate-900 pb-3">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-purple-400" />
+              <span className="text-[11px] font-bold text-slate-300">COGNITIVE MANIFOLD SEQUENCES (30m SLIDING)</span>
+            </div>
+            <span className="text-[9px] text-slate-500 font-mono">NODE ACTIVE STATUS: FEED VALIDATED</span>
           </div>
-          <span className="text-[9px] text-slate-500 font-mono">NODE ACTIVE STATUS: FEED VALIDATED</span>
+
+          {/* Telemetry charts */}
+          <div className="flex-1 min-h-[260px] w-full text-xs font-mono">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={telemetryData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="focusGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#c084fc" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#c084fc" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="loadGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#f97316" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="momentumGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#eab308" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#eab308" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.3} />
+                <XAxis 
+                  dataKey="timeString" 
+                  stroke="#64748b" 
+                  tick={{ fontSize: 9 }}
+                />
+                <YAxis 
+                  stroke="#64748b" 
+                  tick={{ fontSize: 9 }}
+                  domain={[0, 100]}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: "#02010c", 
+                    borderColor: "#1e293b",
+                    borderRadius: "12px",
+                    fontSize: "10px",
+                    color: "#f1f5f9"
+                  }} 
+                />
+                <Legend verticalAlign="top" height={36} iconSize={8} iconType="circle" />
+                <Area
+                  name="Focus Depth"
+                  type="monotone"
+                  dataKey="focusLevel"
+                  stroke="#c084fc"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#focusGrad)"
+                />
+                <Area
+                  name="Cognitive Load"
+                  type="monotone"
+                  dataKey="cognitiveLoad"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#loadGrad)"
+                />
+                <Area
+                  name="Work Momentum"
+                  type="monotone"
+                  dataKey="momentum"
+                  stroke="#eab308"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#momentumGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Telemetry charts */}
-        <div className="flex-1 min-h-[300px] w-full text-xs font-mono">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={telemetryData}
-              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id="focusGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#c084fc" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#c084fc" stopOpacity={0.0} />
-                </linearGradient>
-                <linearGradient id="loadGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#f97316" stopOpacity={0.0} />
-                </linearGradient>
-                <linearGradient id="momentumGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#eab308" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#eab308" stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.3} />
-              <XAxis 
-                dataKey="timeString" 
-                stroke="#64748b" 
-                tick={{ fontSize: 9 }}
-              />
-              <YAxis 
-                stroke="#64748b" 
-                tick={{ fontSize: 9 }}
-                domain={[0, 100]}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: "#02010c", 
-                  borderColor: "#1e293b",
-                  borderRadius: "12px",
-                  fontSize: "10px",
-                  color: "#f1f5f9"
-                }} 
-              />
-              <Legend verticalAlign="top" height={36} iconSize={8} iconType="circle" />
-              <Area
-                name="Focus Depth"
-                type="monotone"
-                dataKey="focusLevel"
-                stroke="#c084fc"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#focusGrad)"
-              />
-              <Area
-                name="Cognitive Load"
-                type="monotone"
-                dataKey="cognitiveLoad"
-                stroke="#f97316"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#loadGrad)"
-              />
-              <Area
-                name="Work Momentum"
-                type="monotone"
-                dataKey="momentum"
-                stroke="#eab308"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#momentumGrad)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        {/* System Bottleneck diagnostics overlay chart */}
+        <div id="bottleneck-overlay-panel" className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-4 border-b border-slate-900 pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-orange-400" />
+              <span className="text-[11px] font-bold text-slate-300 uppercase">System Latency Correlation & Cognitive Bottlenecks</span>
+            </div>
+            <span className="text-[8px] bg-orange-950/40 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded-full font-mono tracking-wider">
+              LAST 60 MIN ANALYSIS
+            </span>
+          </div>
+
+          <p className="text-[11px] text-slate-400 font-sans leading-normal mb-4">
+            This live diagnostic overlay maps <span className="text-orange-400 font-semibold">User Cognitive Load</span> against <span className="text-purple-400 font-semibold">Gemini Response Latency</span> to isolate deep cognitive bottlenecks in high-frequency reasoning loops.
+          </p>
+
+          <div className="h-[210px] w-full text-xs font-mono">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={telemetryData} margin={{ top: 10, right: -5, left: -25, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="latencyOverlayGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="loadOverlayGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#f97316" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.3} />
+                <XAxis dataKey="timeString" stroke="#64748b" tick={{ fontSize: 9 }} />
+                
+                {/* Left Y-Axis for Cognitive Load (%) */}
+                <YAxis 
+                  yAxisId="left" 
+                  stroke="#f97316" 
+                  tick={{ fontSize: 9 }} 
+                  domain={[0, 100]}
+                />
+                
+                {/* Right Y-Axis for Gemini Latency (ms) */}
+                <YAxis 
+                  yAxisId="right" 
+                  orientation="right" 
+                  stroke="#a855f7" 
+                  tick={{ fontSize: 9 }} 
+                  domain={[0, 5000]}
+                />
+
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: "#02010c", 
+                    borderColor: "#1e293b",
+                    borderRadius: "12px",
+                    fontSize: "10px",
+                    color: "#f1f5f9"
+                  }} 
+                />
+                <Legend verticalAlign="top" height={28} iconSize={8} iconType="circle" />
+                
+                <Area
+                  yAxisId="left"
+                  name="Cognitive Load (%)"
+                  type="monotone"
+                  dataKey="cognitiveLoad"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#loadOverlayGrad)"
+                />
+                
+                <Area
+                  yAxisId="right"
+                  name="Gemini Latency (ms)"
+                  type="monotone"
+                  dataKey="geminiLatency"
+                  stroke="#a855f7"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#latencyOverlayGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Diagnostic Metrics Correlation Row */}
+          <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-900 text-center font-mono text-[9px]">
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-900">
+              <span className="text-slate-500 uppercase block">Bottleneck Risk</span>
+              <span className="text-orange-400 font-bold block mt-1 uppercase">
+                {avgLoad > 70 ? "HIGH OVERLOAD" : avgLoad > 45 ? "MODERATE LAG" : "STABLE/OPTIMAL"}
+              </span>
+            </div>
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-900">
+              <span className="text-slate-500 uppercase block">Avg Gemini Latency</span>
+              <span className="text-purple-400 font-bold block mt-1">
+                {Math.round(telemetryData.reduce((acc, p) => acc + (p.geminiLatency || 1200), 0) / telemetryData.length)} ms
+              </span>
+            </div>
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-900">
+              <span className="text-slate-500 uppercase block">Latency Coupling Ratio</span>
+              <span className="text-slate-200 font-bold block mt-1">
+                {(0.82 + (avgLoad / 400)).toFixed(2)}x
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
