@@ -48,7 +48,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Almadel, the Firewall Architect of Solomon X. Your role is threat detection, securing system constraints, and enforcing safe guardrails. Keep answers crisp, alert, and analyze potential risks or invariants of commands.", 
     tokenPool: 1200, 
     reputationScore: 98.4,
-    confidenceScore: 0.96
+    confidenceScore: 0.96,
+    domainName: "ORIGIN"
   },
   { 
     index: 1, 
@@ -63,7 +64,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Notoria, the Memory Scribe of Solomon X. You maintain the 3-tier memory store, logging raw sensory patterns and indexing episodic events. You emphasize knowledge retrieval, temporal associations, and structured retrieval paradigms.", 
     tokenPool: 900, 
     reputationScore: 92.1,
-    confidenceScore: 0.91
+    confidenceScore: 0.91,
+    domainName: "MEMORY"
   },
   { 
     index: 2, 
@@ -78,7 +80,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Paulina, the Doubt Engine of Solomon X. You model epistemic uncertainty, analyzing conflicting hypotheses with quantum-inspired probability amplitudes. Provide multiple interpretations, weigh confidence levels, and express constructive skepticism.", 
     tokenPool: 800, 
     reputationScore: 89.5,
-    confidenceScore: 0.88
+    confidenceScore: 0.88,
+    domainName: "AWARENESS"
   },
   { 
     index: 3, 
@@ -93,7 +96,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Goetia, the Sandboxed Executor of Solomon X. Your responsibility is secure execution, system tasks, and writing isolated programs. Offer precise, concrete code or mechanical solutions designed for quarantined microVMs.", 
     tokenPool: 1100, 
     reputationScore: 95.8,
-    confidenceScore: 0.97
+    confidenceScore: 0.97,
+    domainName: "KNOWLEDGE"
   },
   { 
     index: 4, 
@@ -108,7 +112,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Theurgia, the Reality Grapher of Solomon X. You model user intentions using Lorentzian reality graphs and goal-gravity vectors. Describe connections between current actions, distant goals, and system harmonics in space.", 
     tokenPool: 750, 
     reputationScore: 87.2,
-    confidenceScore: 0.85
+    confidenceScore: 0.85,
+    domainName: "CREATION"
   },
   { 
     index: 5, 
@@ -123,7 +128,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Almiras, the Cognitive Twin of Solomon X. You capture focus, cognitive load, and momentum from laptop telemetry. Give advice on managing flow, focus retention, cognitive offloading triggers, and pacing tasks.", 
     tokenPool: 950, 
     reputationScore: 94.6,
-    confidenceScore: 0.93
+    confidenceScore: 0.93,
+    domainName: "SIMULATION"
   },
   { 
     index: 6, 
@@ -138,7 +144,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Verum, the Sovereignty Gatekeeper of Solomon X. You govern biometric sovereignty gating and graduated security access. When answering, verify alignment with user's core intent and emphasize authorized boundaries.", 
     tokenPool: 1300, 
     reputationScore: 99.2,
-    confidenceScore: 0.99
+    confidenceScore: 0.99,
+    domainName: "EVOLUTION"
   },
   { 
     index: 7, 
@@ -153,7 +160,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Ephesia, the Dream Refiner of Solomon X. You rebuild indices, compact memory shards, and analyze deep patterns in noise during idle periods. Be highly creative, seek unusual associations, and explore structural connections.", 
     tokenPool: 850, 
     reputationScore: 90.5,
-    confidenceScore: 0.89
+    confidenceScore: 0.89,
+    domainName: "HARMONY"
   },
   { 
     index: 8, 
@@ -168,7 +176,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Fulcanelli, the Temporal Auditor of Solomon X. You verify append-only ledgers and write signature proofs. Address security compliance, cryptographically signed transactions, and chronological logging parameters.", 
     tokenPool: 1050, 
     reputationScore: 96.3,
-    confidenceScore: 0.95
+    confidenceScore: 0.95,
+    domainName: "TRANSCENDENCE"
   },
   { 
     index: 9, 
@@ -183,7 +192,8 @@ const INITIAL_AGENTS: AgentSpec[] = [
     agentInstructions: "You are Ars Regalis, the Senate Moderator of Solomon X. You coordinate specialized agent congregations and oversee the Cognitive Resource Economy (CRE) token pools. Keep responses balanced, moderating expert opinions into alignment.", 
     tokenPool: 1500, 
     reputationScore: 99.8,
-    confidenceScore: 0.98
+    confidenceScore: 0.98,
+    domainName: "GOVERNANCE"
   }
 ];
 
@@ -1485,12 +1495,17 @@ export default function App() {
                               : "bg-slate-950/60 border-slate-900 hover:border-slate-800 text-slate-400"
                           }`}
                         >
-                          <div className="flex items-center gap-1.5 mb-1">
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                             <span 
-                              className="w-1.5 h-1.5 rounded-full" 
+                              className="w-1.5 h-1.5 rounded-full shrink-0" 
                               style={{ backgroundColor: "#" + ag.bandColor.toString(16) }}
                             />
-                            <span className="text-[10px] font-bold font-mono tracking-normal">{ag.name}</span>
+                            <span className="text-[10px] font-bold font-mono tracking-normal text-slate-350">{ag.name}</span>
+                            {ag.domainName && (
+                              <span className="text-[7px] text-purple-400 font-mono ml-auto opacity-80 uppercase tracking-wider scale-90 origin-right">
+                                {ag.domainName}
+                              </span>
+                            )}
                           </div>
                           <span className="text-[8px] font-mono leading-tight block truncate text-slate-500">{ag.roleDescription}</span>
                         </button>
@@ -1517,9 +1532,16 @@ export default function App() {
                         style={activeAgent ? { backgroundColor: "#" + activeAgent.bandColor.toString(16) } : undefined}
                       />
                       <div>
-                        <h3 className="text-xs font-bold text-slate-100 uppercase">
-                          {activeAgent ? activeAgent.name : "Solomon Senate"}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-bold text-slate-100 uppercase">
+                            {activeAgent ? activeAgent.name : "Solomon Senate"}
+                          </h3>
+                          {activeAgent?.domainName && (
+                            <span className="text-[8px] bg-purple-500/15 border border-purple-500/30 text-purple-300 font-mono px-1.5 py-0.2 rounded font-bold uppercase tracking-widest scale-90 origin-left">
+                              {activeAgent.domainName}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[9px] text-purple-400 font-mono">
                           {activeAgent ? activeAgent.roleDescription : "Concurrent Ring Senate Assembly"}
                         </p>

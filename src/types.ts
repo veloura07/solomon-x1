@@ -42,6 +42,7 @@ export interface AgentSpec {
   tokenPool: number;
   reputationScore: number;
   confidenceScore: number;
+  domainName?: string;
 }
 
 export interface TelemetryPoint {

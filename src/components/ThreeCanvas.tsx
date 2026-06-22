@@ -80,35 +80,26 @@ const BlurShader = {
     uniform float uKernelSize;
     varying vec2 vUv;
     void main() {
+      float weight[5];
+      weight[0] = 0.2270270270;
+      weight[1] = 0.1945945946;
+      weight[2] = 0.1216216216;
+      weight[3] = 0.0540540541;
+      weight[4] = 0.0162162162;
+      
       vec2 offset = vec2(uKernelSize) / uResolution;
-      vec3 result = texture2D(tDiffuse, vUv).rgb * 0.2270270270;
-
+      vec3 result = texture2D(tDiffuse, vUv).rgb * weight[0];
       if (uHorizontal) {
-        result += texture2D(tDiffuse, vUv + vec2(offset.x * 1.0, 0.0)).rgb * 0.1945945946;
-        result += texture2D(tDiffuse, vUv - vec2(offset.x * 1.0, 0.0)).rgb * 0.1945945946;
-
-        result += texture2D(tDiffuse, vUv + vec2(offset.x * 2.0, 0.0)).rgb * 0.1216216216;
-        result += texture2D(tDiffuse, vUv - vec2(offset.x * 2.0, 0.0)).rgb * 0.1216216216;
-
-        result += texture2D(tDiffuse, vUv + vec2(offset.x * 3.0, 0.0)).rgb * 0.0540540541;
-        result += texture2D(tDiffuse, vUv - vec2(offset.x * 3.0, 0.0)).rgb * 0.0540540541;
-
-        result += texture2D(tDiffuse, vUv + vec2(offset.x * 4.0, 0.0)).rgb * 0.0162162162;
-        result += texture2D(tDiffuse, vUv - vec2(offset.x * 4.0, 0.0)).rgb * 0.0162162162;
+        for (int i = 1; i < 5; ++i) {
+          result += texture2D(tDiffuse, vUv + vec2(offset.x * float(i), 0.0)).rgb * weight[i];
+          result += texture2D(tDiffuse, vUv - vec2(offset.x * float(i), 0.0)).rgb * weight[i];
+        }
       } else {
-        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 1.0)).rgb * 0.1945945946;
-        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 1.0)).rgb * 0.1945945946;
-
-        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 2.0)).rgb * 0.1216216216;
-        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 2.0)).rgb * 0.1216216216;
-
-        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 3.0)).rgb * 0.0540540541;
-        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 3.0)).rgb * 0.0540540541;
-
-        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 4.0)).rgb * 0.0162162162;
-        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 4.0)).rgb * 0.0162162162;
+        for (int i = 1; i < 5; ++i) {
+          result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * float(i))).rgb * weight[i];
+          result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * float(i))).rgb * weight[i];
+        }
       }
-
       gl_FragColor = vec4(result, 1.0);
     }
   `
@@ -539,6 +530,71 @@ const CinematicDoFShader = {
   `
 };
 
+// God-Rays (Volumetric Light Shafts) post-processing shader with screen-space light-source projection and ray marching accumulation
+const GodRaysShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uLightPositionScreen: { value: new THREE.Vector2(0.5, 0.5) },
+    uExposure: { value: 0.16 }, // Subtle and museum-quality
+    uDecay: { value: 0.94 },    // Speed of attenuation
+    uDensity: { value: 0.82 },  // Spacing between light samples
+    uWeight: { value: 0.58 },   // Luminance weight of each step
+    uClampMax: { value: 0.75 },
+    uTime: { value: 0.0 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uResolution;
+    uniform vec2 uLightPositionScreen;
+    uniform float uExposure;
+    uniform float uDecay;
+    uniform float uDensity;
+    uniform float uWeight;
+    uniform float uClampMax;
+    uniform float uTime;
+    varying vec2 vUv;
+
+    void main() {
+      const int SAMPLES = 36; // High sample density for smooth gradient shafts
+      vec2 deltaTexCoord = vUv - uLightPositionScreen;
+      deltaTexCoord *= (1.0 / float(SAMPLES)) * uDensity;
+      
+      vec2 texCoord = vUv;
+      float illuminationDecay = 1.0;
+      vec3 accumulatedRays = vec3(0.0);
+      
+      for (int i = 0; i < SAMPLES; i++) {
+        texCoord -= deltaTexCoord;
+        vec3 sampleColor = texture2D(tDiffuse, texCoord).rgb;
+        
+        // Extract high-intensity self-illuminating regions (like Artificial Star core & Solomon Script glyphs)
+        float luma = dot(sampleColor, vec3(0.2126, 0.7152, 0.0722));
+        vec3 brightPart = sampleColor * smoothstep(0.48, 0.88, luma);
+        
+        accumulatedRays += brightPart * illuminationDecay * uWeight;
+        illuminationDecay *= uDecay;
+      }
+      
+      vec4 original = texture2D(tDiffuse, vUv);
+      vec3 lightShafts = clamp(accumulatedRays * uExposure, 0.0, uClampMax);
+      
+      // Fine-grain atmospheric dust simulation in the light shafts
+      float dustNoise = sin(vUv.x * 2500.0 + uTime * 3.5) * cos(vUv.y * 1800.0 - uTime * 3.0);
+      vec3 dustGrain = vec3(0.012) * dustNoise * lightShafts;
+      
+      gl_FragColor = vec4(original.rgb + lightShafts + dustGrain, original.a);
+    }
+  `
+};
+
 // Programmatically generate a detailed procedural normal map for micro-metallic texture
 function createFineGrainNormalMap(): THREE.CanvasTexture {
   const size = 1024; // Upgrade resolution for ultra-fidelity micro-grain polishing
@@ -850,6 +906,7 @@ const ringFragShader = `
   uniform sampler2D uMatCap;
   uniform sampler2D uMetallicRoughness;
   uniform float uBloomGlowFactor;
+  uniform float uDialectSeed;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -984,16 +1041,67 @@ const ringFragShader = `
     float activePulse = uPulseIntensity * (0.9 + 0.2 * sin(uTime * 3.5));
     float finalEmissiveIntensity = uEmissiveIntensity * activePulse * uBloomGlowFactor * mix(1.1 + 1.3 * uHoverIntensity, 0.15, uDoFBlur);
     
-    // Procedural runic engraving inlay glow with screen-space hardware anti-aliasing to eliminate pixelation
-    float runeNoise1 = sin(vUv.x * 48.0) * cos(vUv.y * 8.0 + uTime * 0.5);
-    float val1 = fwidth(runeNoise1);
-    float runeInlay = smoothstep(0.965 - val1 * 1.5, 0.965 + val1 * 1.5, runeNoise1);
+    // ─── PROCEDURAL GEOMETRIC SOLOMON SCRIPT LANGUAGE ENGINE ───
+    // Divides each ring into 24 high-precision orbital script sectors
+    float glyphCellCount = 24.0;
+    float segmentId = floor(vUv.x * glyphCellCount);
     
-    float runeNoise2 = cos(vUv.y * 14.0 + vUv.x * 12.0);
-    float val2 = fwidth(runeNoise2);
-    runeInlay += smoothstep(0.982 - val2 * 1.5, 0.982 + val2 * 1.5, runeNoise2);
+    // Scale and shift coordinates to a clean [-1, 1] local glyph cell box
+    vec2 glyphLocalPos = vec2(fract(vUv.x * glyphCellCount) * 2.0 - 1.0, (vUv.y * 2.0 - 1.0) * 2.45); 
     
-    vec3 runesEmissive = uAccentColor * min(runeInlay, 2.0) * 1.8 * finalEmissiveIntensity;
+    float distToCenter = length(glyphLocalPos);
+    float valFwidth = fwidth(distToCenter);
+    
+    // Solomon Structure 1: Concentric Celestial Orbit Rings
+    float outerRing = abs(distToCenter - 0.68);
+    float innerRing = abs(distToCenter - 0.36);
+    float outerRingMask = smoothstep(0.045 + valFwidth * 1.5, 0.045 - valFwidth * 1.5, outerRing);
+    float innerRingMask = smoothstep(0.04 + valFwidth * 1.5, 0.04 - valFwidth * 1.5, innerRing);
+    
+    // Solomon Structure 2: Mathematical Node Grid Coordinates
+    float centerNodeMask = smoothstep(0.12 + valFwidth, 0.08 - valFwidth, distToCenter);
+    
+    // Solomon Structure 3: Precise Axioms / Connecting Tangent Lines
+    float radialLineX = smoothstep(0.035, 0.012, abs(glyphLocalPos.x));
+    float radialLineY = smoothstep(0.035, 0.012, abs(glyphLocalPos.y));
+    
+    // Solomon Structure 4: Sub-Orbital Quantum Satellites (rotating dynamically)
+    float satSpeed = 0.85 + mod(segmentId, 3.0) * 0.65;
+    float satAngle = uTime * satSpeed + segmentId * 1.332;
+    vec2 satPos1 = vec2(cos(satAngle), sin(satAngle)) * 0.52;
+    float satelliteNode1 = smoothstep(0.10 + valFwidth, 0.06 - valFwidth, length(glyphLocalPos - satPos1));
+    
+    vec2 satPos2 = vec2(cos(satAngle + 3.1415), sin(satAngle + 3.1415)) * 0.35;
+    float satelliteNode2 = smoothstep(0.08 + valFwidth, 0.04 - valFwidth, length(glyphLocalPos - satPos2));
+    
+    // Select and assemble the dialect based on a pseudo-random seed per segment cell
+    float cellSeed = sin(segmentId * 14.88 + 3.14 + uDialectSeed * 42.12) * 0.5 + 0.5;
+    float runeInlay = 0.0;
+    
+    if (cellSeed < 0.25) {
+      // Celestial Dialect A: Central node, outer orbit, spinning sub-orbitals, aligned axial line
+      runeInlay = max(centerNodeMask, outerRingMask * step(0.12, cos(atan(glyphLocalPos.y, glyphLocalPos.x) + uTime * 0.25)));
+      runeInlay = max(runeInlay, satelliteNode1);
+      runeInlay = max(runeInlay, radialLineX * step(distToCenter, 0.68));
+    } else if (cellSeed < 0.50) {
+      // Celestial Dialect B: Concentric dual-lattice ring system with an orthogonal intersection grid
+      runeInlay = max(outerRingMask, innerRingMask);
+      runeInlay = max(runeInlay, radialLineX * radialLineY * step(distToCenter, 0.85));
+      runeInlay = max(runeInlay, satelliteNode2);
+    } else if (cellSeed < 0.75) {
+      // Celestial Dialect C: Spline-crossings with dual orbiting quantum satellites
+      runeInlay = max(outerRingMask, radialLineY * step(abs(glyphLocalPos.x), 0.52));
+      runeInlay = max(runeInlay, satelliteNode1);
+      runeInlay = max(runeInlay, satelliteNode2);
+    } else {
+      // Celestial Dialect D: Modular coordinate arcs with an offset central satellite
+      float arcAngle = atan(glyphLocalPos.y, glyphLocalPos.x);
+      float arcSeg = step(0.2, sin(arcAngle * 3.0 + uTime * 0.4));
+      runeInlay = max(centerNodeMask, outerRingMask * arcSeg);
+      runeInlay = max(runeInlay, satelliteNode1);
+    }
+    
+    vec3 runesEmissive = uAccentColor * min(runeInlay, 2.0) * 2.0 * finalEmissiveIntensity;
     
     // Linked to uAccentColor with a constant baseline to maintain a consistent, attractive glow
     float baseGlowConstant = 0.55; // Ensures an attractive constant glow regardless of viewport activity
@@ -1129,6 +1237,7 @@ export default function ThreeCanvas({
 
     // Subtle hover-responsive parallax state
     const parallax = { x: 0, y: 0 };
+    let zoomLevel = 0.0; // Dynamic scroll wheel zoom offset
 
     // ─── PART 1: SCENE SETUP ──────────────────────────────
     const scene = new THREE.Scene();
@@ -1310,6 +1419,11 @@ export default function ThreeCanvas({
     motionBlurPass.uniforms.uVelocity.value.set(0, 0);
     composer.addPass(motionBlurPass);
 
+    // High-fidelity God-Rays Pass (Volumetric light shafts)
+    const godRaysPass = new ShaderPass(GodRaysShader);
+    godRaysPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
+    composer.addPass(godRaysPass);
+
     // ─── PART 4: TWINKLING STARFIELD ──────────────────────
     const STAR_COUNT = 300;
     const starGeo = new THREE.BufferGeometry();
@@ -1446,75 +1560,184 @@ export default function ThreeCanvas({
     const sigilGroup = new THREE.Group();
     scene.add(sigilGroup);
 
-    // 6A. Core Sphere
-    const coreGeo = new THREE.SphereGeometry(6, 256, 256); // Pristine high subdivision density
+    // 6A. CORE (Layer 6: Miniature artificial sun of consciousness & info)
+    // We map this to coreMesh so that existing camera / selected scale tweens continue to work perfectly.
+    const coreGeo = new THREE.SphereGeometry(3.6, 64, 64);
     const coreMat = new THREE.MeshPhysicalMaterial({
-      color: 0xffaa00,
-      emissive: 0xff6600,
-      emissiveIntensity: 2.2,     // High-intensity core self-illumination
-      roughness: 0.02,
-      metalness: 0.12,
-      transmission: 0.62,         // Gorgeous translucent refraction bloom core!
-      ior: 1.58,                  // Crystal index of refraction
-      thickness: 3.5,             // Thickness for light refraction calculations
-      clearcoat: 1.0,            // Highly glossy outer lacquer coat
-      clearcoatRoughness: 0.01,
-      normalMap: normalMapTexture,
-      normalScale: new THREE.Vector2(0.2, 0.2),
-      roughnessMap: metallicRoughnessTexture,
-      metalnessMap: metallicRoughnessTexture
+      color: 0xffffff,
+      emissive: 0xffaa00,
+      emissiveIntensity: 5.5, // blinding energy core
+      roughness: 0.05,
+      metalness: 0.1,
+      transmission: 0.85,
+      thickness: 2.0,
+      ior: 1.5,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.01
     });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     sigilGroup.add(coreMesh);
 
-    // 6B. Gyroscope Rings (concentric)
+    // 6B. OUTER ORBITAL CAGE (Layer 1: 12 rotating circles at different spherical angles)
+    // We map these to the gyroRings array so they receive dynamic spin and GSAP spikes!
     const gyroRings = [] as THREE.Mesh[];
-    const ringRadii = [12, 16, 20];
-    const ringColors = [0xffd070, 0xc9933a, 0x7c4df3];
+    const cageRingColors = [
+      0xffd070, 0xc9933a, 0x7c4df3, 0xcca33a,
+      0xff9900, 0xaa44ff, 0xffaa00, 0x8b0000,
+      0x4b0082, 0x008b8b, 0x1a4a1a, 0xff8c00
+    ];
 
-    ringRadii.forEach((rad, idx) => {
-      const geo = new THREE.TorusGeometry(rad, 0.46, 128, 512); // Upgraded radial and tubular subdivisions
+    for (let i = 0; i < 12; i++) {
+      const rad = 20.0 - (i * 0.35); // nested cage radii
+      const geo = new THREE.TorusGeometry(rad, 0.16, 16, 128);
       const mat = new THREE.MeshPhysicalMaterial({
-        color: ringColors[idx],
-        emissive: ringColors[idx],
-        emissiveIntensity: 0.8,
-        roughness: 0.08,
-        metalness: 0.96,
-        clearcoat: 1.0,        // Clear protective glossy glaze
-        clearcoatRoughness: 0.02,
-        normalMap: normalMapTexture,
-        normalScale: new THREE.Vector2(0.25, 0.25),
-        roughnessMap: metallicRoughnessTexture,
-        metalnessMap: metallicRoughnessTexture
+        color: cageRingColors[i % cageRingColors.length],
+        emissive: cageRingColors[i % cageRingColors.length],
+        emissiveIntensity: 1.6,
+        roughness: 0.12,
+        metalness: 0.98,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.04
       });
       const ring = new THREE.Mesh(geo, mat);
       
-      // Give initial random rotations
-      ring.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      // Compute golden spiral spherical distribution orientations for clean 3D scaffolding
+      const phi = Math.acos(-1.0 + (2.0 * i) / 12.0);
+      const theta = Math.sqrt(12.0 * Math.PI) * phi;
+      ring.rotation.set(phi, theta, 0);
+      
       sigilGroup.add(ring);
       gyroRings.push(ring);
-    });
+    }
 
-    // 6C. Wireframe Orbit Icosahedra
-    const icoGeo = new THREE.IcosahedronGeometry(25, 1);
-    const icoMat = new THREE.MeshBasicMaterial({
+    // 6C. SACRED GEOMETRY SPHERE (Layer 2: Metatron-inspired original wireframe system)
+    const metatronGroup = new THREE.Group();
+    sigilGroup.add(metatronGroup);
+    
+    const icoGeo = new THREE.IcosahedronGeometry(14.0, 1);
+    const dodecaGeo = new THREE.DodecahedronGeometry(11.0, 1);
+    const metatronMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa00,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const metatronIco = new THREE.Mesh(icoGeo, metatronMat);
+    const metatronDodeca = new THREE.Mesh(dodecaGeo, metatronMat);
+    metatronDodeca.rotation.y = Math.PI / 4;
+    metatronGroup.add(metatronIco);
+    metatronGroup.add(metatronDodeca);
+
+    // 6D. FLOATING SYMBOLS (Layer 3: 350+ golden Solomon Script glyph nodes orbiting in space)
+    const symbolPointsCount = 380;
+    const symbolPositions = new Float32Array(symbolPointsCount * 3);
+    const symbolMetadata = [] as { radius: number; phi: number; theta: number; speed: number; phase: number }[];
+    
+    for (let i = 0; i < symbolPointsCount; i++) {
+      const radius = 15.0 + Math.random() * 4.2;
+      const phi = Math.acos(-1.0 + Math.random() * 2.0);
+      const theta = Math.random() * Math.PI * 2;
+      
+      symbolPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+      symbolPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      symbolPositions[i * 3 + 2] = radius * Math.cos(phi);
+      
+      symbolMetadata.push({
+        radius,
+        phi,
+        theta,
+        speed: (0.2 + Math.random() * 0.6) * (Math.random() < 0.5 ? 1.0 : -1.0),
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+    
+    const symbolCloudGeo = new THREE.BufferGeometry();
+    symbolCloudGeo.setAttribute("position", new THREE.BufferAttribute(symbolPositions, 3));
+    const symbolCloudMat = new THREE.PointsMaterial({
+      color: 0xffe6a0,
+      size: 0.85,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      map: glowSpriteTexture,
+      depthWrite: false
+    });
+    const symbolCloud = new THREE.Points(symbolCloudGeo, symbolCloudMat);
+    sigilGroup.add(symbolCloud);
+
+    // 6E. LIGHT WEB (Layer 4: Neural light connections mapping nodes together)
+    const neuralGroup = new THREE.Group();
+    sigilGroup.add(neuralGroup);
+    const networkNodeCount = 32;
+    const networkNodesPos = [] as THREE.Vector3[];
+    // Evenly spaced points on sphere radius 12.5
+    for (let i = 0; i < networkNodeCount; i++) {
+      const phi = Math.acos(-1.0 + (2.0 * i) / networkNodeCount);
+      const theta = Math.sqrt(networkNodeCount * Math.PI) * phi;
+      const r = 12.5;
+      const p = new THREE.Vector3(
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.sin(phi) * Math.sin(theta),
+        r * Math.cos(phi)
+      );
+      networkNodesPos.push(p);
+      
+      // Node marker
+      const markerGeo = new THREE.SphereGeometry(0.16, 8, 8);
+      const markerMat = new THREE.MeshBasicMaterial({ color: 0xffd070 });
+      const marker = new THREE.Mesh(markerGeo, markerMat);
+      marker.position.copy(p);
+      neuralGroup.add(marker);
+    }
+    const linePositions = [] as number[];
+    for (let i = 0; i < networkNodeCount; i++) {
+      for (let j = i + 1; j < networkNodeCount; j++) {
+        const dist = networkNodesPos[i].distanceTo(networkNodesPos[j]);
+        if (dist < 6.8) {
+          linePositions.push(networkNodesPos[i].x, networkNodesPos[i].y, networkNodesPos[i].z);
+          linePositions.push(networkNodesPos[j].x, networkNodesPos[j].y, networkNodesPos[j].z);
+        }
+      }
+    }
+    const lightWebGeo = new THREE.BufferGeometry();
+    lightWebGeo.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+    const lightWebMat = new THREE.LineBasicMaterial({
       color: 0x7c4df3,
-      wireframe: true,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
     });
-    const icoMesh = new THREE.Mesh(icoGeo, icoMat);
-    sigilGroup.add(icoMesh);
+    const lightWeb = new THREE.LineSegments(lightWebGeo, lightWebMat);
+    neuralGroup.add(lightWeb);
 
-    const icoGeoInner = new THREE.IcosahedronGeometry(21, 2); // nested higher density sacred geometry cage
-    const icoMatInner = new THREE.MeshBasicMaterial({
-      color: 0xff9900,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.12,
-    });
-    const icoMeshInner = new THREE.Mesh(icoGeoInner, icoMatInner);
-    sigilGroup.add(icoMeshInner);
+    // 6F. INNER STAR (Layer 5: 12-point stellar construct)
+    const starGroup = new THREE.Group();
+    sigilGroup.add(starGroup);
+    for (let i = 0; i < 12; i++) {
+      const phi = Math.acos(-1.0 + (2.0 * i) / 12.0);
+      const theta = Math.sqrt(12.0 * Math.PI) * phi;
+      const axialDir = new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta),
+        Math.sin(phi) * Math.sin(theta),
+        Math.cos(phi)
+      );
+      const needleGeo = new THREE.ConeGeometry(0.3, 5.0, 4);
+      const needleMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffaa00,
+        emissive: 0xff5500,
+        emissiveIntensity: 3.2,
+        roughness: 0.08,
+        metalness: 0.92
+      });
+      const needle = new THREE.Mesh(needleGeo, needleMat);
+      const up = new THREE.Vector3(0, 1, 0);
+      needle.quaternion.setFromUnitVectors(up, axialDir);
+      needle.position.copy(axialDir).multiplyScalar(2.5);
+      starGroup.add(needle);
+    }
 
     // ─── PART 6D: THE HOLOGRAPHIC COGNITIVE AVATAR ───────────
     const avatarGroup = new THREE.Group();
@@ -1777,7 +2000,25 @@ export default function ThreeCanvas({
       dragDecayFactor: number;
       dataStreamLine?: THREE.Line;
       glowMat?: THREE.ShaderMaterial;
+      outerHaloMesh?: THREE.Mesh;
+      microGlyphMesh?: THREE.Mesh;
+      dataRingMesh?: THREE.Points;
+      planetMesh?: THREE.Mesh;
+      planetRing?: THREE.Mesh;
     }[];
+
+    const DOMAIN_NAMES = [
+      "ORIGIN",
+      "AWARENESS",
+      "MEMORY",
+      "KNOWLEDGE",
+      "CREATION",
+      "SIMULATION",
+      "EVOLUTION",
+      "HARMONY",
+      "TRANSCENDENCE",
+      "WILDCARD"
+    ];
 
     agents.forEach((spec) => {
       const g = new THREE.Group();
@@ -1796,7 +2037,7 @@ export default function ThreeCanvas({
         angle
       );
 
-      // Create Torus Band with hyper-resolution subdivisions (256 x 1024)
+      // Create Torus Band: Layer 3 (Energy Ring Pure Plasma) - subdivision 256x1024
       const bandGeo = new THREE.TorusGeometry(8, 1.25, 256, 1024);
       const bandMat = new THREE.ShaderMaterial({
         vertexShader: ringVertShader,
@@ -1816,12 +2057,83 @@ export default function ThreeCanvas({
           uAccentColor: { value: new THREE.Color(spec.accentColor) },
           uReputationScore: { value: spec.reputationScore },
           uBloomGlowFactor: { value: 2.6 },
+          uDialectSeed: { value: spec.index * 13.57 }, // Seed dialect per intelligence domain!
         },
         depthWrite: true,
         depthTest: true,
       });
       const bandMesh = new THREE.Mesh(bandGeo, bandMat);
       g.add(bandMesh);
+
+      // Layer 1: Outer Halo (Thin, contains outer script, rotates independently)
+      const outerHaloMat = bandMat.clone();
+      outerHaloMat.uniforms.uBloomGlowFactor = { value: 1.8 };
+      outerHaloMat.uniforms.uDialectSeed = { value: spec.index * 13.57 + 4.56 }; // Offset the outer script slightly
+      const outerHaloMesh = new THREE.Mesh(new THREE.TorusGeometry(9.2, 0.1, 32, 128), outerHaloMat);
+      g.add(outerHaloMesh);
+
+      // Layer 2: Micro Glyph Ring (Thousands of extra smaller symbols engraved, glowing softly)
+      const microGlyphMat = bandMat.clone();
+      microGlyphMat.uniforms.uBloomGlowFactor = { value: 1.1 };
+      microGlyphMat.uniforms.uDialectSeed = { value: spec.index * 13.57 - 9.12 }; // Counter-dialect offsets
+      const microGlyphMesh = new THREE.Mesh(new THREE.TorusGeometry(8.5, 0.15, 32, 128), microGlyphMat);
+      g.add(microGlyphMesh);
+
+      // Layer 5: Data Ring (Floating particles, unique volumetric orbitals and chaotic offsets per domain)
+      const isTranscendental = spec.index === 0 || spec.index === 8 || spec.index === 9;
+      const customParticleCount = isTranscendental ? 72 : 28 + (spec.index * 5);
+      const customParticleRadius = 5.6 + (spec.index % 3) * 0.75;
+      const customParticleSize = 0.18 + (spec.index % 4) * 0.11;
+
+      const pPositions = new Float32Array(customParticleCount * 3);
+      for (let j = 0; j < customParticleCount; j++) {
+        const theta = (j / customParticleCount) * Math.PI * 2;
+        const radialSway = Math.sin(theta * (2.0 + (spec.index % 3))) * (0.35 + (spec.index % 2) * 0.2);
+        pPositions[j * 3] = Math.cos(theta) * (customParticleRadius + radialSway);
+        pPositions[j * 3 + 1] = Math.sin(theta) * (customParticleRadius + radialSway);
+        pPositions[j * 3 + 2] = (Math.random() - 0.5) * (0.2 + spec.index * 0.1);
+      }
+      const dataRingGeo = new THREE.BufferGeometry();
+      dataRingGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+      const dataRingMat = new THREE.PointsMaterial({
+        color: spec.accentColor,
+        size: customParticleSize,
+        map: glowSpriteTexture,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const dataRingMesh = new THREE.Points(dataRingGeo, dataRingMat);
+      g.add(dataRingMesh);
+
+      // Layer 6: Core Ring (Identity planetary core - "not a donut, but a planet with gravity")
+      const planetGeo = new THREE.SphereGeometry(2.0, 32, 32);
+      const planetMat = new THREE.MeshPhysicalMaterial({
+        color: spec.stoneColor,
+        emissive: spec.stoneColor,
+        emissiveIntensity: 1.5,
+        roughness: 0.12,
+        metalness: 0.88,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.02,
+        transmission: 0.42,
+        thickness: 0.8
+      });
+      const planetMesh = new THREE.Mesh(planetGeo, planetMat);
+      g.add(planetMesh);
+
+      // Planetary rings orbiting the core domain sphere
+      const planetRingGeo = new THREE.TorusGeometry(3.0, 0.08, 16, 64);
+      const planetRingMat = new THREE.MeshBasicMaterial({
+        color: spec.accentColor,
+        transparent: true,
+        opacity: 0.5,
+        wireframe: true
+      });
+      const planetRing = new THREE.Mesh(planetRingGeo, planetRingMat);
+      planetRing.rotation.x = Math.PI / 3;
+      g.add(planetRing);
 
       // Create an additive volumetric atmospheric glow mesh around the torus band (ethereal bloom simulator)
       const glowGeo = new THREE.TorusGeometry(8, 1.55, 128, 512);
@@ -2036,6 +2348,11 @@ export default function ThreeCanvas({
         dragDecayFactor: 0.932,
         dataStreamLine,
         glowMat,
+        outerHaloMesh,
+        microGlyphMesh,
+        dataRingMesh,
+        planetMesh,
+        planetRing,
       });
     });
 
@@ -2395,6 +2712,16 @@ export default function ThreeCanvas({
     container.addEventListener("touchmove", handleTouchMove, { passive: true });
     container.addEventListener("touchend", handleMouseUp, { passive: true });
 
+    const handleWheel = (event: WheelEvent) => {
+      if (event.target === canvasRef.current) {
+        event.preventDefault();
+      }
+      zoomLevel += event.deltaY * 0.15;
+      // Clamp zoom level: maximum zoom-in is near target rings, maximum zoom-out is bounded
+      zoomLevel = Math.max(-65.0, Math.min(120.0, zoomLevel));
+    };
+    container.addEventListener("wheel", handleWheel, { passive: false });
+
     // ─── PART 9: RENDER / ANIMATION RAF LOOP ─────────────────────────────
     let clock = new THREE.Clock();
     let animationFrameId = 0;
@@ -2637,10 +2964,10 @@ export default function ThreeCanvas({
       }
       sparksPosAttr.needsUpdate = true;
 
-      icoMesh.rotation.y = -time * 0.04;
-      if (icoMeshInner) {
-        icoMeshInner.rotation.y = time * 0.075;
-        icoMeshInner.rotation.x = time * 0.038;
+      metatronIco.rotation.y = -time * 0.04;
+      if (metatronDodeca) {
+        metatronDodeca.rotation.y = time * 0.075;
+        metatronDodeca.rotation.x = time * 0.038;
       }
       sigilGroup.rotation.z = time * 0.02;
 
@@ -2790,10 +3117,11 @@ export default function ThreeCanvas({
       }
 
 
-      // Hover-responsive parallax camera shift + Focus Zoom to selected ring
+      // Hover-responsive parallax camera shift + Focus Zoom to selected ring + Scroll Zoom level integration
       const targetCamX = parallax.x * 12.0;
       const targetCamY = parallax.y * 10.0;
-      const targetCamZ = isAgentActive ? 95.0 : 160.0;
+      const baseCamZ = isAgentActive ? 95.0 : 160.0;
+      const targetCamZ = baseCamZ + zoomLevel;
       camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 3.5 * delta);
       camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, 3.5 * delta);
       camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, 2.5 * delta);
@@ -2843,14 +3171,13 @@ export default function ThreeCanvas({
       const sizeArr = trailGeo.attributes.size.array as Float32Array;
 
       let traceCount = 0;
-      let nextIdx = activeTrails.length - 1;
-
       for (let i = activeTrails.length - 1; i >= 0; i--) {
         const pt = activeTrails[i];
         pt.age += delta;
 
-        // filter out old particles without splicing O(N^2) overhead
+        // splicing if old
         if (pt.age >= pt.maxAge) {
+          activeTrails.splice(i, 1);
           continue;
         }
 
@@ -2892,16 +3219,7 @@ export default function ThreeCanvas({
             traceCount++;
           }
         }
-
-        activeTrails[nextIdx--] = pt;
       }
-
-      // Shift elements to the front
-      const validCount = activeTrails.length - 1 - nextIdx;
-      for (let i = 0; i < validCount; i++) {
-        activeTrails[i] = activeTrails[nextIdx + 1 + i];
-      }
-      activeTrails.length = validCount;
 
       // Zero-out remaining particles
       for (let i = traceCount; i < MAX_TRAIL_PARTICLES; i++) {
@@ -2941,6 +3259,10 @@ export default function ThreeCanvas({
         targetFocusPos = scratchFocusTargetPos.set(0, 0, 0);
         focusRangeTarget = isCoreHovered ? 0.20 : 0.26; // Blurs background rings even more when hover-focusing core
       }
+
+      // Automatically adjust camera focus range as the camera gets closer to the active ring archetype / core
+      const focusDistanceScale = Math.max(0.18, Math.min(1.0, (camera.position.z - 30.0) / 130.0));
+      focusRangeTarget *= focusDistanceScale;
 
       let focusTargetX = 0.5;
       let focusTargetY = 0.5;
@@ -2999,14 +3321,18 @@ export default function ThreeCanvas({
       const hoverIntensityMul = isAnyRingHovered ? 1.85 : 1.0;
       const hoverThresholdMul = isAnyRingHovered ? 1.45 : 1.0;
 
-      const bloomIntensityBoost = (isAgentActive ? 2.8 : 2.2) * bloomBreathing * hoverIntensityMul;
+      // Automatically adjust the bloom as the camera nears the active ring archetype / central construct
+      const distanceScale = Math.max(0.18, Math.min(1.0, (camera.position.z - 30.0) / 130.0));
+      const zoomBloomBoost = 1.0 + (1.0 - distanceScale) * 0.55;
+
+      const bloomIntensityBoost = (isAgentActive ? 2.8 : 2.2) * bloomBreathing * hoverIntensityMul * zoomBloomBoost;
       bloomPass.intensity = THREE.MathUtils.lerp(
         bloomPass.intensity,
         bloomIntensityBoost * bloomIntensityRef.current,
         5.0 * delta
       );
       
-      const targetThreshold = bloomThresholdRef.current * (isAgentActive ? 0.75 : 0.9) * hoverThresholdMul;
+      const targetThreshold = bloomThresholdRef.current * (isAgentActive ? 0.75 : 0.9) * hoverThresholdMul * (2.0 - zoomBloomBoost * 0.5);
       bloomPass.threshold = THREE.MathUtils.lerp(bloomPass.threshold, targetThreshold, 5.0 * delta);
 
       // Shift workspace ambient/point lights and core material colors towards agent accent color when active
@@ -3133,6 +3459,27 @@ export default function ThreeCanvas({
         } else {
           pr.stoneMesh.scale.setScalar(1.0);
         }
+
+        // Compute domain-specific orbital motion frequency and dynamic drift multipliers
+        const domainFrequency = 0.55 + (pr.index * 0.22); // Range [0.55, 2.53] Hz
+        const directionFactor = pr.index % 2 === 0 ? 1.0 : -1.0;
+
+        // Layer 1: Outer Halo rotation (rotating independently around local Z axis)
+        if (pr.outerHaloMesh) {
+          pr.outerHaloMesh.rotation.z += delta * 1.8 * directionFactor * domainFrequency;
+        }
+        // Layer 2: Micro Glyph Ring rotation (rotating in opposite direction)
+        if (pr.microGlyphMesh) {
+          pr.microGlyphMesh.rotation.z += delta * 1.1 * -directionFactor * (domainFrequency * 0.85);
+        }
+        // Layer 5: Orbiting Data particles rotation
+        if (pr.dataRingMesh) {
+          pr.dataRingMesh.rotation.z += delta * 2.8 * directionFactor * (domainFrequency * 1.15);
+        }
+        // Layer 6: Planetary Core slow rotation
+        if (pr.planetMesh) {
+          pr.planetMesh.rotation.y += delta * 0.35 * domainFrequency;
+        }
       });
 
       // ─── INTERACTION LENS BILLBOARD PLANE ANIMATION & UPDATES ───
@@ -3177,6 +3524,14 @@ export default function ThreeCanvas({
       // Apply dynamic camera-screen motion blur pass values smoothly
       motionBlurPass.uniforms.uVelocity.value.x = THREE.MathUtils.lerp(motionBlurPass.uniforms.uVelocity.value.x, calculatedMotionBlurVector.x, 6.0 * delta);
       motionBlurPass.uniforms.uVelocity.value.y = THREE.MathUtils.lerp(motionBlurPass.uniforms.uVelocity.value.y, calculatedMotionBlurVector.y, 6.0 * delta);
+
+      // Ray-trace project the 3D position of the artificial star core (0,0,0) to screen-space NDC space for the God-Rays pass
+      const lightProjV = new THREE.Vector3(0, 0, 0);
+      lightProjV.project(camera);
+      const ndcScreenX = (lightProjV.x * 0.5) + 0.5;
+      const ndcScreenY = (lightProjV.y * 0.5) + 0.5;
+      godRaysPass.uniforms.uLightPositionScreen.value.set(ndcScreenX, ndcScreenY);
+      godRaysPass.uniforms.uTime.value = clock.getElapsedTime();
 
       // Render backgrounds & main layers separately for high-fidelity composite depth
       renderer.autoClear = false;
@@ -3302,6 +3657,7 @@ export default function ThreeCanvas({
       dofPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
       bloomPass.setSize(container.clientWidth, container.clientHeight);
       motionBlurPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
+      godRaysPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
@@ -3341,6 +3697,7 @@ export default function ThreeCanvas({
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchmove", handleTouchMove);
       container.removeEventListener("touchend", handleMouseUp);
+      container.removeEventListener("wheel", handleWheel);
       resizeObserver.disconnect();
       renderer.dispose();
       composer.dispose();
