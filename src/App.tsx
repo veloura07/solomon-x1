@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, FormEvent, useMemo } from "react";
+import gsap from "gsap";
 import { Message, MemoryItem, AuditLog, AgentSpec, TelemetryPoint } from "./types";
 import ThreeCanvas from "./components/ThreeCanvas";
 import MemoryCortex from "./components/MemoryCortex";
@@ -6,6 +7,7 @@ import TrustTerminal from "./components/TrustTerminal";
 import StateTracker from "./components/StateTracker";
 import SovereignConsole from "./components/SovereignConsole";
 import { CognitiveResourceEconomy, Layer0Firewall, EvolutionLab } from "./components/SolomonOSComponents";
+import { CognitiveProficiencyRadar } from "./components/CogniciencyRadar";
 import AvatarCorePanel from "./components/AvatarCorePanel";
 import { 
   Bot, 
@@ -334,26 +336,42 @@ export default function App() {
   const activeAgent = selectedRingIndex !== -1 ? agents[selectedRingIndex] : null;
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Dynamically adjust root CSS variables when the active agent shifts
+  // Subtle CSS-transition manager using GSAP-based color tweens to smoothly interpolate CSS variables
+  const currentTweenColors = useRef({
+    primary: "#450a0a",
+    accent: "#ec4899"
+  });
+
+  // Dynamically adjust root CSS variables when the active agent shifts using GSAP
   useEffect(() => {
     // Helper to format 0xRRGGBB as a 6-character hex color string
     const hexColorStr = (colorNum: number) => `#${colorNum.toString(16).padStart(6, "0")}`;
     
+    let targetPrimary = "#450a0a";
+    let targetAccent = "#ec4899";
+
     if (activeAgent) {
-      const primaryHex = hexColorStr(activeAgent.bandColor);
-      const accentHex = hexColorStr(activeAgent.accentColor);
-      
-      document.documentElement.style.setProperty("--agent-primary", primaryHex);
-      document.documentElement.style.setProperty("--agent-accent", accentHex);
-      document.documentElement.style.setProperty("--agent-accent-glow", `${accentHex}2a`); // ~16% opacity
-      document.documentElement.style.setProperty("--agent-accent-muted", `${accentHex}0e`); // ~5% opacity
-    } else {
-      // Default to unified senate assembly colors (deep royal violet/amethyst)
-      document.documentElement.style.setProperty("--agent-primary", "#450a0a");
-      document.documentElement.style.setProperty("--agent-accent", "#ec4899");
-      document.documentElement.style.setProperty("--agent-accent-glow", "#ec48992a");
-      document.documentElement.style.setProperty("--agent-accent-muted", "#ec48990e");
+      targetPrimary = hexColorStr(activeAgent.bandColor);
+      targetAccent = hexColorStr(activeAgent.accentColor);
     }
+
+    // Kill any active GSAP tweens of this object to avoid competition
+    gsap.killTweensOf(currentTweenColors.current);
+
+    gsap.to(currentTweenColors.current, {
+      primary: targetPrimary,
+      accent: targetAccent,
+      duration: 0.82,
+      ease: "power2.out",
+      onUpdate: () => {
+        const prim = currentTweenColors.current.primary;
+        const ac = currentTweenColors.current.accent;
+        document.documentElement.style.setProperty("--agent-primary", prim);
+        document.documentElement.style.setProperty("--agent-accent", ac);
+        document.documentElement.style.setProperty("--agent-accent-glow", `${ac}2a`);
+        document.documentElement.style.setProperty("--agent-accent-muted", `${ac}0e`);
+      }
+    });
   }, [activeAgent]);
 
   // Auto-scroll chat to bottom
@@ -391,6 +409,53 @@ export default function App() {
     };
     setAuditLogs([addedLog, ...auditLogs]);
   };
+
+  // Idle Reputation Decay mechanic and active agent validation reward
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAgents(prev => {
+        let decayedAny = false;
+        const updated = prev.map(a => {
+          const isCurrentActive = a.index === selectedRingIndex;
+          if (!isCurrentActive) {
+            // Idle agent loses fractional reputation
+            const decayAmount = 0.08;
+            const nextRep = Math.max(45.0, a.reputationScore - decayAmount);
+            if (a.reputationScore > 45.0) decayedAny = true;
+            return {
+              ...a,
+              reputationScore: Number(nextRep.toFixed(2))
+            };
+          } else {
+            // Active agent gains a tiny slice of reputation back (up to 100) as validation reward
+            const nextRep = Math.min(100.0, a.reputationScore + 0.04);
+            return {
+              ...a,
+              reputationScore: Number(nextRep.toFixed(2))
+            };
+          }
+        });
+
+        // Periodically write warning logs in the auditing thread
+        if (decayedAny && Math.random() < 0.15) {
+          const idleAgents = prev.filter(a => a.index !== selectedRingIndex && a.reputationScore > 50);
+          const decayingAgent = idleAgents[Math.floor(Math.random() * idleAgents.length)];
+          if (decayingAgent) {
+            handleAddAuditLog({
+              actor: "Cognitive Resource Economy",
+              action: "IDLE_REPUTATION_DECAY",
+              status: "GATED_PENDING",
+              details: `Agent ${decayingAgent.name} (Ring #${decayingAgent.index}) has degraded marginally to ${decayingAgent.reputationScore.toFixed(1)}% due to cognitive stagnation. Rotational ring rotation focus highly recommended.`
+            });
+          }
+        }
+
+        return updated;
+      });
+    }, 4500);
+
+    return () => clearInterval(interval);
+  }, [selectedRingIndex, auditLogs.length]);
 
   // Trigger biometric telemetry spikes
   const triggerBiometricTelemetrySpike = () => {
@@ -847,6 +912,121 @@ export default function App() {
     setTelemetryData(newData);
   };
 
+  // Direct Intent Extraction from voice input to parse transcribed speech for commands, navigation, and focus switches
+  const extractVoiceIntent = (text: string) => {
+    const cleanedText = text.toLowerCase();
+    
+    // Toast notification to let the user know we're parsing voice intents!
+    showToastNotification("VOICE INTENT DETECTED", `Parsing transcribed phrase: "${text}"`, "info");
+
+    // 1. Check for Agent Alignment Swaps
+    const agentKeywords = [
+      { name: "almadel", index: 0 },
+      { name: "notoria", index: 1 },
+      { name: "paulina", index: 2 },
+      { name: "goetia", index: 3 },
+      { name: "theurgia", index: 4 },
+      { name: "almiras", index: 5 },
+      { name: "verum", index: 6 },
+      { name: "ephesia", index: 7 },
+      { name: "fulcanelli", index: 8 },
+      { name: "regalis", index: 9 }
+    ];
+
+    for (const ak of agentKeywords) {
+      if (cleanedText.includes(ak.name)) {
+        // Swap focus!
+        handleSelectRing(ak.index);
+        showToastNotification("VOICE INTENT ALIGNED", `Shifting active ring focus to Ars ${ak.name.toUpperCase()} via direct voice command.`, "success");
+        
+        handleAddAuditLog({
+          actor: "Voice Interface Engine",
+          action: "VOICE_AGENT_ALIGNMENT",
+          status: "AUTHORIZED",
+          details: `Direct Intent Extraction triggered: shifting operational ring to index ${ak.index} (Ars ${ak.name})`
+        });
+        return true;
+      }
+    }
+
+    // 2. Check for Navigation Swaps
+    const navKeywords = [
+      { keys: ["economy", "resource", "token", "payment", "reputation"], tab: "economy", label: "Senate & Resource Economy" },
+      { keys: ["presence", "canvas", "holographic", "overview", "sigil", "rings", "radar"], tab: "presence", label: "Cognitive Twin Overview" },
+      { keys: ["directive", "sovereign", "console", "firmware"], tab: "directives", label: "Sovereignty Command Console" },
+      { keys: ["firewall", "shield", "gated"], tab: "firewall", label: "Layer 0 Firewall Matrix" },
+      { keys: ["memory", "dream", "compaction"], tab: "memory", label: "Memory & Dreams Cerebrum" },
+      { keys: ["evolution", "lab", "mutation"], tab: "evolution", label: "Evolution Lab Platform" },
+      { keys: ["trust", "audit", "cryptographic"], tab: "trust", label: "TrustOS Sovereign Log" },
+      { keys: ["twin", "laptop", "inspect"], tab: "twin", label: "Laptop Parity Workspace" }
+    ];
+
+    for (const nk of navKeywords) {
+      if (nk.keys.some(k => cleanedText.includes(k))) {
+        setActiveTab(nk.tab as any);
+        showToastNotification("VOICE NAVIGATION TRIGGERED", `Navigating to ${nk.label} via direct voice intent.`, "success");
+        
+        handleAddAuditLog({
+          actor: "Voice Interface Engine",
+          action: "VOICE_NAVIGATION",
+          status: "AUTHORIZED",
+          details: `Direct Intent Extraction triggered: focused interface view to ${nk.tab} spectrum`
+        });
+        return true;
+      }
+    }
+
+    // 3. Match against other unique Action commands:
+    if (cleanedText.includes("spike") || cleanedText.includes("telemetry") || cleanedText.includes("arousal")) {
+      triggerBiometricTelemetrySpike();
+      showToastNotification("VOICE INTENT TRIGGERED", "Dispatched artificial biometric arousal stimulation.", "success");
+      return true;
+    }
+
+    if (cleanedText.includes("harden") || cleanedText.includes("constitution") || cleanedText.includes("containment")) {
+      setActiveTab('firewall');
+      handleAddAuditLog({
+        actor: "Voice Interface Engine",
+        action: "HARDEN_CONSTITUTION_SHIELD",
+        status: "AUTHORIZED",
+        details: "Voice intent triggered Constitutional defensive buffering."
+      });
+      showToastNotification("COGNITIVE SHIELD HARDENED", "Activated Layer 0 firewall containment protocols successfully.", "success");
+      return true;
+    }
+
+    if (cleanedText.includes("unseal") || cleanedText.includes("tpm") || cleanedText.includes("registers")) {
+      handleAddAuditLog({
+        actor: "Voice Interface Engine",
+        action: "UNSEAL_TPM_REGISTERS",
+        status: "AUTHORIZED",
+        details: "Voice intent triggered hardware-level security register unsealing."
+      });
+      showToastNotification("TPM SECURE REGISTERS UNSEALED", "Sovereign signature validated. Execution of raw microcode enabled.", "info");
+      return true;
+    }
+
+    if (cleanedText.includes("compact") || cleanedText.includes("shards") || cleanedText.includes("clean")) {
+      setActiveTab('memory');
+      handleAddAuditLog({
+        actor: "Voice Interface Engine",
+        action: "TRIGGER_BATCH_COMPACTION",
+        status: "AUTHORIZED",
+        details: "Voice intent triggered batch sensory memory compaction."
+      });
+      showToastNotification("BATCH COMPACTION COMPLETE", "Reclaimed virtual client VRAM and balanced system overall entropy.", "success");
+      return true;
+    }
+
+    if (cleanedText.includes("sync") || cleanedText.includes("websocket") || cleanedText.includes("socket")) {
+      handleManualReconnect();
+      showToastNotification("WEBSOCKET RECOVERY FORCED", "Bypassed retry delays via voice command.", "info");
+      return true;
+    }
+
+    return false;
+  };
+
   // Voice Speech Recognition or simulation
   const handleTriggerSpeech = () => {
     if (isListeningMic) {
@@ -869,6 +1049,7 @@ export default function App() {
         const text = event.results[0][0].transcript;
         if (text) {
           setChatInput(text);
+          extractVoiceIntent(text);
         }
         setIsListeningMic(false);
         setMicRipplePulse(false);
@@ -889,13 +1070,15 @@ export default function App() {
       // Simulate speech input in sandbox environments if Web Speech API isn't enabled
       setTimeout(() => {
         const phrases = [
-          "What is my current cognitive twins focus metric?",
-          "Check memory OS indices from the last session",
-          "Are TPM secure registers unsealed?",
-          "Describe how Ars Paulina models doubt",
+          "Switch focus to cognitive resource economy token system",
+          "Align Connection to Ars Paulina Doubt Engine",
+          "Unseal TPM cryptographic hardware registers",
+          "Compact memory shards and trigger batch compactor",
+          "Switch view to Layer 0 Firewall shielding matrix"
         ];
         const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
         setChatInput(randomPhrase);
+        extractVoiceIntent(randomPhrase);
         setIsListeningMic(false);
         setMicRipplePulse(false);
       }, 2500);
@@ -1314,6 +1497,13 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Cognitive Proficiency Radar chart overlays the balance of senate */}
+                  <CognitiveProficiencyRadar 
+                    activeAgentIndex={selectedRingIndex}
+                    agentName={activeAgent ? activeAgent.name : "Senate Hub"}
+                    agentAccentColor={activeAgent ? `#${activeAgent.accentColor.toString(16).padStart(6, '0')}` : "#c084fc"}
+                  />
                 </div>
 
                 {/* Secure Chat Client Dialogue Side */}

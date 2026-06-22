@@ -2771,15 +2771,16 @@ export default function ThreeCanvas({
       );
 
       // ─── DYNAMIC BLOOM PASS ADAPTATION BASED ON SELECTION & CALIBRATION ───
-      const targetBloomRadius = isAgentActive ? 1.0 : 0.5;
-      // High-frequency bloom intensity boost to ensure extreme ring brilliance
-      const bloomIntensityBoost = isAgentActive ? 1.55 : 0.78;
+      const targetBloomRadius = isAgentActive ? 1.05 : 0.85;
+      // High-frequency bloom intensity boost with slow cosmic breathing oscillation to ensure extreme ring brilliance
+      const bloomBreathing = 1.0 + Math.sin(time * 1.5) * 0.25;
+      const bloomIntensityBoost = (isAgentActive ? 2.8 : 2.2) * bloomBreathing;
       bloomPass.intensity = THREE.MathUtils.lerp(
         bloomPass.intensity,
         bloomIntensityBoost * bloomIntensityRef.current,
         5.0 * delta
       );
-      bloomPass.threshold = bloomThresholdRef.current;
+      bloomPass.threshold = THREE.MathUtils.lerp(bloomPass.threshold, bloomThresholdRef.current * (isAgentActive ? 0.75 : 0.9), 5.0 * delta);
 
       // Shift workspace ambient/point lights and core material colors towards agent accent color when active
       const activeAgent = agents.find((ag) => ag.index === activeIdx);

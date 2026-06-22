@@ -223,6 +223,26 @@ export function CognitiveResourceEconomy({
         </div>
       </div>
 
+      {/* COGNITIVE DECAY ACTIVE STATUS BANNER */}
+      <div className="bg-slate-900/60 border border-purple-500/20 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex gap-3 items-center">
+          <div className="p-2.5 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-lg">
+            <Coins className="w-5 h-5 animate-spin" style={{ animationDuration: "12s" }} />
+          </div>
+          <div className="text-left">
+            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">IDLE REPUTATION DECAY CALIBRATOR ACTIVE</h4>
+            <p className="text-[10px] text-slate-500 mt-1 leading-normal uppercase font-sans">
+              Specialized ring agents unselected lose <span className="text-purple-300 font-bold">-0.08 fractional points</span> every 4.5s. Rotate focus to restore alignment stability.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[8px] px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 font-extrabold uppercase animate-pulse">
+            ROTATORY LOAD PRESSURE: BALANCED
+          </span>
+        </div>
+      </div>
+
       {/* HISTORICAL RECHARTS TELEMETRY DASHBOARD */}
       <div id="economy-historical-charts" className="bg-slate-950/80 border border-slate-800/80 p-5 rounded-2xl space-y-4 shadow-xl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-900 pb-4">
