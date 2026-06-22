@@ -1057,6 +1057,8 @@ export default function App() {
                       <button
                         type="button"
                         onClick={handleTriggerSpeech}
+                        aria-label={isListeningMic ? "Stop listening" : "Start voice input"}
+                        title={isListeningMic ? "Stop listening" : "Start voice input"}
                         className={`absolute right-1.5 top-1.5 w-7 h-7 rounded-lg border flex items-center justify-center transition-all ${
                           isListeningMic 
                             ? "bg-orange-500/20 border-orange-500/40 text-orange-400 animate-pulse" 
@@ -1070,6 +1072,8 @@ export default function App() {
                     <button
                       type="submit"
                       disabled={!chatInput.trim() || sendingChat}
+                      aria-label="Send message"
+                      title={!chatInput.trim() ? "Enter a message to send" : sendingChat ? "Sending..." : "Send message"}
                       className="w-10 h-10 bg-purple-600 hover:bg-purple-500 text-white rounded-xl flex items-center justify-center transition disabled:opacity-50 disabled:hover:bg-purple-600"
                     >
                       <Send className="w-4 h-4" />
