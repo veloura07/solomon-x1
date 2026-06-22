@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
 import { gsap } from "gsap";
-import { RotateCcw, Activity, Shield, Cpu, X } from "lucide-react";
+import { RotateCcw, Sparkles, Activity, Shield, Cpu, RefreshCw, X, Eye, ShieldAlert, CheckCircle, Database } from "lucide-react";
 import { AgentSpec, AuditLog, TelemetryPoint } from "../types";
 
 const LineVertShader = `
@@ -907,6 +907,7 @@ const ringFragShader = `
   uniform sampler2D uMetallicRoughness;
   uniform float uBloomGlowFactor;
   uniform float uDialectSeed;
+  uniform float uReputationScore;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -1099,6 +1100,38 @@ const ringFragShader = `
       float arcSeg = step(0.2, sin(arcAngle * 3.0 + uTime * 0.4));
       runeInlay = max(centerNodeMask, outerRingMask * arcSeg);
       runeInlay = max(runeInlay, satelliteNode1);
+    }
+    
+    // ─── PART 2B: IDLE REPUTATION DECAY SPECTRAL NOISE ───
+    // Introduce reputation-based geometric degradation and flicker below 60%
+    float minRepThreshold = 60.0;
+    if (uReputationScore < minRepThreshold) {
+      float decayAlpha = clamp((minRepThreshold - uReputationScore) / minRepThreshold, 0.0, 1.0);
+      
+      // Determine pixel/block frequency for the high-frequency digital noise
+      float blockX = 140.0;
+      float blockY = 32.0;
+      vec2 gridUv = floor(vUv * vec2(blockX, blockY));
+      
+      // Seed pseudo-random generator with grid coordinates & time for ultra-rapid flicker
+      float noiseVal = fract(sin(dot(gridUv, vec2(12.9898, 78.233))) * 43758.5453123);
+      float fastFlicker = fract(sin(uTime * 48.0 + noiseVal * 12.0) * 1253.11);
+      
+      // At low reputation, the rune coordinate mappings are broken / dislocated
+      float dislocateFlicker = step(0.88, fract(sin(uTime * 3.5 + segmentId * 15.0) * 917.2));
+      
+      // Degrade rune geometry: substitute structured glyph with pure pixelated geometric static
+      float noiseGlyph = step(0.12, noiseVal) * step(noiseVal, 0.35 + decayAlpha * 0.4);
+      runeInlay = mix(runeInlay, noiseGlyph, decayAlpha);
+      
+      // Randomly shut down/flicker entire segment sectors when corrupted
+      float segmentFlicker = step(decayAlpha * 0.45, fract(sin(segmentId * 52.3 + uTime * 18.0) * 43758.5453));
+      runeInlay *= segmentFlicker;
+      
+      // Intermittent dramatic dropouts / high frequency noise overlay
+      if (fastFlicker < decayAlpha * 0.55 && dislocateFlicker > 0.5) {
+        runeInlay = noiseVal * 1.5;
+      }
     }
     
     vec3 runesEmissive = uAccentColor * min(runeInlay, 2.0) * 2.0 * finalEmissiveIntensity;
@@ -1577,6 +1610,58 @@ export default function ThreeCanvas({
     });
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     sigilGroup.add(coreMesh);
+
+    // ─── PART 6A-1: MINIATURE STELLAR STAR & CORONA FLARES ───
+    const scratchStellarVec = new THREE.Vector3();
+    const starCoreGeo = new THREE.DodecahedronGeometry(1.6, 2);
+    const starCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xffeab0,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+    });
+    const starCoreMesh = new THREE.Mesh(starCoreGeo, starCoreMat);
+    sigilGroup.add(starCoreMesh);
+
+    // Dynamic solar flare corona particles
+    const coronaCount = 80;
+    const coronaGeo = new THREE.BufferGeometry();
+    const coronaPositionsInit = new Float32Array(coronaCount * 3);
+    const coronaPositionsLive = new Float32Array(coronaCount * 3);
+    const coronaSpeeds = new Float32Array(coronaCount);
+    
+    for (let i = 0; i < coronaCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      const rad = 1.65 + Math.random() * 0.45;
+      
+      const x = rad * Math.sin(phi) * Math.cos(theta);
+      const y = rad * Math.sin(phi) * Math.sin(theta);
+      const z = rad * Math.cos(phi);
+      
+      coronaPositionsInit[i * 3] = x;
+      coronaPositionsInit[i * 3 + 1] = y;
+      coronaPositionsInit[i * 3 + 2] = z;
+      
+      coronaPositionsLive[i * 3] = x;
+      coronaPositionsLive[i * 3 + 1] = y;
+      coronaPositionsLive[i * 3 + 2] = z;
+      
+      coronaSpeeds[i] = 1.5 + Math.random() * 2.5;
+    }
+    
+    coronaGeo.setAttribute('position', new THREE.BufferAttribute(coronaPositionsLive, 3));
+    const coronaMat = new THREE.PointsMaterial({
+      color: 0xffaa00,
+      size: 0.85,
+      map: glowSpriteTexture,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const coronaField = new THREE.Points(coronaGeo, coronaMat);
+    sigilGroup.add(coronaField);
 
     // 6B. OUTER ORBITAL CAGE (Layer 1: 12 rotating circles at different spherical angles)
     // We map these to the gyroRings array so they receive dynamic spin and GSAP spikes!
@@ -2971,9 +3056,84 @@ export default function ThreeCanvas({
       }
       sigilGroup.rotation.z = time * 0.02;
 
-      // Pulse core glowing intensity - calibrated dynamically based on agent active status to avoid washing out wireframes
-      const pulseRatio = 1.0 + 0.25 * Math.sin(time * 2.5);
-      coreMat.emissiveIntensity = (isAgentActive ? 0.95 : 1.35) * pulseRatio;
+      // ─── DYNAMIC STELLAR PULSE ANIMATION (FOR MIN STAR CORE & CORONA) ───
+      // Extract Gemini confidence and system latency
+      let agentConfidence = 0.92;
+      const activeAgentSpec = activeIdx !== -1 ? agentsRef.current.find(a => a.index === activeIdx) : undefined;
+      if (activeAgentSpec) {
+        agentConfidence = activeAgentSpec.confidenceScore;
+      }
+      
+      const latestPoint = telemetryData && telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined;
+      const currentLatency = latestPoint?.geminiLatency ?? 1300; // latency in ms
+      
+      // Calculate dynamic pulse rate from system latency
+      // A lower latency (e.g., 800ms) results in rapid, energetic pulsing.
+      // A higher latency (e.g., 2000ms) slows down to a heavy, deep breathing cadence.
+      const rawPulseSpeed = 1000.0 / Math.max(200.0, currentLatency); // cycles per second
+      const pulseFreqRad = (rawPulseSpeed * 2.0 * Math.PI) * 1.35; // speed up slightly for high-fidelity breathing
+      const stellarPulseFactor = Math.sin(time * pulseFreqRad);
+      
+      // Animate core geodesic miniature star scale & rotation
+      // Core star glows brighter and scales larger when confidence is higher
+      const baseStarScale = 1.0 + (agentConfidence * 0.45); 
+      const latencyPulseOffset = stellarPulseFactor * 0.18;
+      const finalStarScale = baseStarScale + latencyPulseOffset;
+      
+      starCoreMesh.scale.setScalar(finalStarScale);
+      starCoreMesh.rotation.y += delta * 0.75;
+      starCoreMesh.rotation.x += delta * 0.35;
+      
+      // Confidence score modulates inner core opacity & emissive color blending
+      starCoreMat.opacity = 0.35 + (agentConfidence * 0.50) + stellarPulseFactor * 0.15;
+      // High confidence triggers intense, high-temperature blue-yellow plasma; low confidence feels like dying orange ember
+      const tempStarColor = new THREE.Color();
+      tempStarColor.lerpColors(new THREE.Color(0xff5500), new THREE.Color(0xffe675), 0.35 + agentConfidence * 0.65);
+      starCoreMat.color.copy(tempStarColor);
+
+      // Animate solar corona flare particles
+      const coronaPosAttr = coronaField.geometry.attributes.position as THREE.BufferAttribute;
+      const coronaArr = coronaPosAttr.array as Float32Array;
+      for (let i = 0; i < coronaCount; i++) {
+        const speed = coronaSpeeds[i];
+        const idx = i * 3;
+        
+        // Compute base vector direction
+        const ix = coronaPositionsInit[idx];
+        const iy = coronaPositionsInit[idx + 1];
+        const iz = coronaPositionsInit[idx + 2];
+        scratchStellarVec.set(ix, iy, iz);
+        
+        // Low confidence yields highly irregular, chaotic, unorganized coronal flares
+        const flareErraticness = (1.0 - agentConfidence) * 1.65;
+        const wiggle = Math.sin(time * speed + i * 3.0) * (0.12 + flareErraticness * 0.28);
+        const distanceMultiplier = (1.0 + latencyPulseOffset * 0.62) * (1.05 + wiggle);
+        
+        scratchStellarVec.multiplyScalar(distanceMultiplier);
+        
+        coronaArr[idx] = scratchStellarVec.x;
+        coronaArr[idx + 1] = scratchStellarVec.y;
+        coronaArr[idx + 2] = scratchStellarVec.z;
+      }
+      coronaPosAttr.needsUpdate = true;
+      
+      // Slowly spin the solar corona particle cloud in opposite direction
+      coronaField.rotation.y -= delta * 0.22;
+      coronaField.rotation.z += delta * 0.15;
+      
+      // Pulse core physical glass sphere emissive intensity linked to confidence & latency breathing
+      const physicalCorePower = 0.7 + (agentConfidence * 1.8);
+      const glassPulse = 1.0 + 0.30 * stellarPulseFactor;
+      coreMat.emissiveIntensity = (isAgentActive ? 1.05 : 1.45) * glassPulse * physicalCorePower;
+      
+      // Lerp physical sphere emissive color slightly to visual feedback matching the temperature
+      const targetEmissiveColor = new THREE.Color(0xffaa00);
+      if (agentConfidence > 0.94) {
+        targetEmissiveColor.set(0xfff0a0); // extremely intense white/yellow flame
+      } else if (agentConfidence < 0.70) {
+        targetEmissiveColor.set(0xff3300); // deep red dying star
+      }
+      coreMat.emissive.lerp(targetEmissiveColor, 3.0 * delta);
 
       // ─── DYNAMIC HOLOGRAPHIC COGNITIVE AVATAR ANIMATIONS ───
       // Gently rotate and bob the holographic head representation
@@ -3364,6 +3524,25 @@ export default function ThreeCanvas({
       physicalRings.forEach((pr) => {
         const isSelected = pr.index === activeIdx;
 
+        // ─── PROCEDURAL ORBITAL RESONANCE WORKLOAD (TOKEN RATE) ───
+        let tokenConsumptionRate = 4.0 + Math.sin(time * 0.8 + pr.index * 1.7) * 2.5; // low background flow
+        if (isSelected) {
+          tokenConsumptionRate = 22.0 + Math.sin(time * 2.5) * 8.0;
+          if (sendingChat) {
+            // High processing workload spike!
+            tokenConsumptionRate += 160.0 + Math.sin(time * 15.0) * 45.0 + Math.cos(time * 7.5) * 25.0;
+          }
+        } else {
+          // Occasional background bursts from other senate domains analyzing telemetry
+          const burstSeed = Math.sin(time * 0.2 + pr.index * 4.3);
+          if (burstSeed > 0.75) {
+            tokenConsumptionRate += (burstSeed - 0.75) * 40.0 * (1.2 + Math.sin(time * 10.0));
+          }
+        }
+
+        // Slightly change their rotation frequency based on workload rate
+        const resonanceFreqMultiplier = 1.0 + (tokenConsumptionRate / 140.0);
+
         // Smooth position positioning (LERP with integrated floating offset to prevent jumps)
         const ringAngle = (pr.index / 10) * Math.PI * 2;
         const ringFloatOffset = isSelected ? 0.0 : Math.sin(time * 1.5 + ringAngle) * 3.5;
@@ -3375,6 +3554,17 @@ export default function ThreeCanvas({
           tempTargetPos.set(pr.homePos.x, pr.homePos.y + ringFloatOffset, pr.homePos.z);
         }
         pr.group.position.lerp(tempTargetPos, 7.0 * delta);
+
+        // Apply high-frequency 'Orbital Resonance' vibration to ring coordinates based on workload
+        const vibrAmplitude = (tokenConsumptionRate / 200.0) * 0.18; // Spikes generate strong physical rattle
+        if (vibrAmplitude > 0.005) {
+          const jitterX = Math.sin(time * 65.0 + pr.index * 13.0) * vibrAmplitude;
+          const jitterY = Math.cos(time * 62.0 - pr.index * 11.0) * vibrAmplitude;
+          const jitterZ = Math.sin(time * 58.0 + pr.index * 7.0) * vibrAmplitude;
+          pr.group.position.x += jitterX;
+          pr.group.position.y += jitterY;
+          pr.group.position.z += jitterZ;
+        }
         
         // Compute base, hover, and GSAP resonance scale
         const resScale = pr.animState.resonanceScale !== undefined ? pr.animState.resonanceScale : 1.0;
@@ -3387,25 +3577,31 @@ export default function ThreeCanvas({
           pr.group.rotation.x += pr.animState.resonanceRot * delta * 0.05;
         }
 
-        // Update custom shader material properties
-        if (pr.bandMesh.material instanceof THREE.ShaderMaterial) {
-          pr.bandMesh.material.uniforms.uTime.value = time;
-          pr.bandMesh.material.uniforms.uHoverIntensity.value = pr.animState.hoverIntensity;
-          pr.bandMesh.material.uniforms.uPulseIntensity.value = pr.animState.pulseIntensity;
+        // Dynamic Bokeh Depth Of Field interpolation
+        // If no specific ring is active, keep all clear and focused (0.0)
+        // If a ring is active, blur all OTHER rings seamlessly (1.0)
+        const targetDoF = (activeIdx !== -1 && !isSelected) ? 1.0 : 0.0;
+        const currentDoF = pr.bandMesh.material instanceof THREE.ShaderMaterial ? pr.bandMesh.material.uniforms.uDoFBlur.value : 0.0;
+        const nextDoF = THREE.MathUtils.lerp(currentDoF, targetDoF, 6.0 * delta);
 
-          // Dynamically sync real-time reputation score to vertex displacement noise fields
-          const agentSpec = agentsRef.current.find((ag) => ag.index === pr.index);
-          if (agentSpec) {
-            pr.bandMesh.material.uniforms.uReputationScore.value = agentSpec.reputationScore;
+        const agentSpec = agentsRef.current.find((ag) => ag.index === pr.index);
+        
+        // Synchronize all cloned materials (Outer Halo, Micro Glyphs, & bandMesh)
+        const updateMeshMaterialUniforms = (mesh: THREE.Mesh | undefined) => {
+          if (mesh && mesh.material instanceof THREE.ShaderMaterial) {
+            mesh.material.uniforms.uTime.value = time;
+            mesh.material.uniforms.uHoverIntensity.value = pr.animState.hoverIntensity;
+            mesh.material.uniforms.uPulseIntensity.value = pr.animState.pulseIntensity;
+            mesh.material.uniforms.uDoFBlur.value = nextDoF;
+            if (agentSpec) {
+              mesh.material.uniforms.uReputationScore.value = agentSpec.reputationScore;
+            }
           }
+        };
 
-          // Dynamic Bokeh Depth Of Field interpolation
-          // If no specific ring is active, keep all clear and focused (0.0)
-          // If a ring is active, blur all OTHER rings seamlessly (1.0)
-          const targetDoF = (activeIdx !== -1 && !isSelected) ? 1.0 : 0.0;
-          const currentDoF = pr.bandMesh.material.uniforms.uDoFBlur.value;
-          pr.bandMesh.material.uniforms.uDoFBlur.value = THREE.MathUtils.lerp(currentDoF, targetDoF, 6.0 * delta);
-        }
+        updateMeshMaterialUniforms(pr.bandMesh);
+        updateMeshMaterialUniforms(pr.outerHaloMesh);
+        updateMeshMaterialUniforms(pr.microGlyphMesh);
 
         // Update custom glow shader material properties
         if (pr.glowMat && pr.glowMat instanceof THREE.ShaderMaterial) {
@@ -3464,21 +3660,23 @@ export default function ThreeCanvas({
         const domainFrequency = 0.55 + (pr.index * 0.22); // Range [0.55, 2.53] Hz
         const directionFactor = pr.index % 2 === 0 ? 1.0 : -1.0;
 
+        const speedMult = resonanceFreqMultiplier;
+
         // Layer 1: Outer Halo rotation (rotating independently around local Z axis)
         if (pr.outerHaloMesh) {
-          pr.outerHaloMesh.rotation.z += delta * 1.8 * directionFactor * domainFrequency;
+          pr.outerHaloMesh.rotation.z += delta * 1.8 * directionFactor * domainFrequency * speedMult;
         }
         // Layer 2: Micro Glyph Ring rotation (rotating in opposite direction)
         if (pr.microGlyphMesh) {
-          pr.microGlyphMesh.rotation.z += delta * 1.1 * -directionFactor * (domainFrequency * 0.85);
+          pr.microGlyphMesh.rotation.z += delta * 1.1 * -directionFactor * (domainFrequency * 0.85) * speedMult;
         }
         // Layer 5: Orbiting Data particles rotation
         if (pr.dataRingMesh) {
-          pr.dataRingMesh.rotation.z += delta * 2.8 * directionFactor * (domainFrequency * 1.15);
+          pr.dataRingMesh.rotation.z += delta * 2.8 * directionFactor * (domainFrequency * 1.15) * speedMult;
         }
         // Layer 6: Planetary Core slow rotation
         if (pr.planetMesh) {
-          pr.planetMesh.rotation.y += delta * 0.35 * domainFrequency;
+          pr.planetMesh.rotation.y += delta * 0.35 * domainFrequency * speedMult;
         }
       });
 
