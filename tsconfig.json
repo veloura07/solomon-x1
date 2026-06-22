@@ -25,7 +25,8 @@
   },
   "include": [
     "src",
-    "server.ts"
+    "server.ts",
+    "vitest.setup.ts"
   ],
   "exclude": [
     "node_modules",
