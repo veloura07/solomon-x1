@@ -11,6 +11,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+app.disable('x-powered-by');
 app.use(express.json());
 
 // Initialize Gemini SDK securely (server-side only)
@@ -182,7 +183,7 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
       } catch (err: any) {
         console.error("[WS ERROR]", err);
         ws.send(JSON.stringify({ event: "status", state: "idle" }));
-        ws.send(JSON.stringify({ event: "error", message: err.message || "An error occurred inside Solomon's neural bus." }));
+        ws.send(JSON.stringify({ event: "error", message: "An error occurred inside Solomon's neural bus." }));
       }
     }
   });
@@ -271,7 +272,7 @@ app.post("/api/chat", async (req, res) => {
 
   } catch (err: any) {
     console.error("Consciousness core fault:", err);
-    res.status(500).json({ error: err.message || "Unknown error occurred on the neural bus." });
+    res.status(500).json({ error: "Unknown error occurred on the neural bus." });
   }
 });
 
@@ -334,7 +335,7 @@ Provide result strictly in JSON schema format:
     res.json(parsed);
   } catch (err: any) {
     console.error("Anticipation system fault:", err);
-    res.status(500).json({ error: err.message || "Prediction core fail." });
+    res.status(500).json({ error: "Prediction core fail." });
   }
 });
 
