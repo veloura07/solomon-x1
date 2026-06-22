@@ -1,27 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { 
   Coins, 
   Cpu, 
-  Activity, 
   ShieldCheck, 
-  Flame, 
   Lock, 
   AlertTriangle, 
   RefreshCw, 
   GitBranch, 
-  GitMerge, 
   CheckCircle, 
-  Play, 
   FileText, 
-  Terminal, 
-  ExternalLink,
   Sliders,
-  Sparkles,
   Zap,
-  TrendingUp,
-  Award
+  TrendingUp
 } from "lucide-react";
-import { AgentSpec, AuditLog } from "../types";
+import { AgentSpec } from "../types";
 
 // ==========================================
 // SYSTEM 1 & 2: COGNITIVE RESOURCE ECONOMY & AGENT SENATE
