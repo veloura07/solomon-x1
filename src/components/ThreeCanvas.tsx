@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
 import { gsap } from "gsap";
-import { RotateCcw, Sparkles, Activity, Shield, Cpu, RefreshCw, X, Eye, ShieldAlert, CheckCircle, Database } from "lucide-react";
+import { RotateCcw, Activity, Shield, Cpu, X } from "lucide-react";
 import { AgentSpec, AuditLog, TelemetryPoint } from "../types";
 
 const LineVertShader = `
