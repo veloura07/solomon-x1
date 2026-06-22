@@ -1172,6 +1172,7 @@ interface ThreeCanvasProps {
   telemetryData?: TelemetryPoint[];
   sendingChat?: boolean;
   isListeningMic?: boolean;
+  rotationLocked?: boolean;
 }
 
 export default function ThreeCanvas({ 
@@ -1183,7 +1184,8 @@ export default function ThreeCanvas({
   auditLogs = [],
   telemetryData = [],
   sendingChat = false,
-  isListeningMic = false
+  isListeningMic = false,
+  rotationLocked = false
 }: ThreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1214,6 +1216,7 @@ export default function ThreeCanvas({
   
   const sendingChatRef = useRef<boolean>(!!sendingChat);
   const isListeningMicRef = useRef<boolean>(!!isListeningMic);
+  const rotationLockedRef = useRef<boolean>(!!rotationLocked);
 
   useEffect(() => {
     sendingChatRef.current = !!sendingChat;
@@ -1222,6 +1225,10 @@ export default function ThreeCanvas({
   useEffect(() => {
     isListeningMicRef.current = !!isListeningMic;
   }, [isListeningMic]);
+
+  useEffect(() => {
+    rotationLockedRef.current = !!rotationLocked;
+  }, [rotationLocked]);
 
   // Sync bloom parameters in the background to avoid re-constructing the WebGL canvas
   useEffect(() => {
@@ -2859,6 +2866,7 @@ export default function ThreeCanvas({
 
     // ─── PART 9: RENDER / ANIMATION RAF LOOP ─────────────────────────────
     let clock = new THREE.Clock();
+    let animTime = 0;
     let animationFrameId = 0;
     let frameCount = 0;
     let lastFpsUpdate = performance.now();
@@ -2908,6 +2916,9 @@ export default function ThreeCanvas({
       // Prevent jumpy rotations and extreme jitters by clamping the high-precision clock delta
       delta = Math.max(0.0001, Math.min(0.05, delta));
       const time = clock.getElapsedTime();
+      
+      const autoRotSpeed = rotationLockedRef.current ? 0.0 : 1.0;
+      animTime += delta * autoRotSpeed;
 
       // Recalculate native 4K target dynamically on container updates
       currentDPRScale = Math.max(window.devicePixelRatio || 1.0, 3840.0 / Math.max(1.0, container.clientWidth));
@@ -2997,7 +3008,7 @@ export default function ThreeCanvas({
 
       while (physicsAccumulator >= FIXED_TIMESTEP) {
         // 1. Rotate deep space stars & plasma drift (Fixed Update)
-        starField.rotation.y += 0.005 * FIXED_TIMESTEP;
+        starField.rotation.y += 0.005 * FIXED_TIMESTEP * autoRotSpeed;
 
         const posAttr = driftingParticles.geometry.attributes.position as THREE.BufferAttribute;
         for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -3011,7 +3022,7 @@ export default function ThreeCanvas({
 
         // 2. Spin central Gyros in conflicting patterns (Fixed Update)
         gyroRings.forEach((ring, idx) => {
-          const factor = (idx + 1) * 0.12;
+          const factor = (idx + 1) * 0.12 * autoRotSpeed;
           ring.rotation.x += factor * FIXED_TIMESTEP;
           ring.rotation.y += factor * 0.7 * FIXED_TIMESTEP;
         });
@@ -3023,9 +3034,9 @@ export default function ThreeCanvas({
 
           if (isSelected) {
             // Centered active ring spins rapidly under sustained driving torque
-            const targetVx = 0.50;
-            const targetVy = 1.40;
-            const targetVz = 0.05;
+            const targetVx = rotationLockedRef.current ? 0.0 : 0.50;
+            const targetVy = rotationLockedRef.current ? 0.0 : 1.40;
+            const targetVz = rotationLockedRef.current ? 0.0 : 0.05;
 
             // Only apply sustained target driving torque if user is not actively whipping/dragging the ring
             if (!isBeingDragged) {
@@ -3107,8 +3118,8 @@ export default function ThreeCanvas({
       for (let i = 0; i < SPARKS_COUNT; i++) {
         const rate = sparksRates[i];
         const baseRad = sparksRadii[i];
-        // Rotate in reverse slowly
-        const ang = -time * rate + (i / SPARKS_COUNT) * Math.PI * 2 + sparksOffsets[i] * 0.05;
+        // Rotate in reverse slowly using animTime
+        const ang = -animTime * rate + (i / SPARKS_COUNT) * Math.PI * 2 + sparksOffsets[i] * 0.05;
         // Minor pulse distance
         const rad = baseRad + Math.sin(time * 1.2 + sparksOffsets[i]) * 1.5;
         const zValue = Math.cos(time * 0.4 + sparksOffsets[i]) * 3.0;
@@ -3116,12 +3127,12 @@ export default function ThreeCanvas({
       }
       sparksPosAttr.needsUpdate = true;
 
-      metatronIco.rotation.y = -time * 0.04;
+      metatronIco.rotation.y = -animTime * 0.04;
       if (metatronDodeca) {
-        metatronDodeca.rotation.y = time * 0.075;
-        metatronDodeca.rotation.x = time * 0.038;
+        metatronDodeca.rotation.y = animTime * 0.075;
+        metatronDodeca.rotation.x = animTime * 0.038;
       }
-      sigilGroup.rotation.z = time * 0.02;
+      sigilGroup.rotation.z = animTime * 0.02;
 
       // ─── DYNAMIC STELLAR PULSE ANIMATION (FOR MIN STAR CORE & CORONA) ───
       // Utilizing globally extracted agentConfidence, currentLatency, and stellarPulseFactor
@@ -3133,8 +3144,8 @@ export default function ThreeCanvas({
       const finalStarScale = baseStarScale + latencyPulseOffset;
       
       starCoreMesh.scale.setScalar(finalStarScale);
-      starCoreMesh.rotation.y += delta * 0.75;
-      starCoreMesh.rotation.x += delta * 0.35;
+      starCoreMesh.rotation.y += delta * 0.75 * autoRotSpeed;
+      starCoreMesh.rotation.x += delta * 0.35 * autoRotSpeed;
       
       // Confidence score modulates inner core opacity & emissive color blending
       starCoreMat.opacity = 0.35 + (agentConfidence * 0.50) + stellarPulseFactor * 0.15;
@@ -3169,9 +3180,9 @@ export default function ThreeCanvas({
       }
       coronaPosAttr.needsUpdate = true;
       
-      // Slowly spin the solar corona particle cloud in opposite direction
-      coronaField.rotation.y -= delta * 0.22;
-      coronaField.rotation.z += delta * 0.15;
+      // Slowly spin the solar corona particle cloud in opposite direction using autoRotSpeed
+      coronaField.rotation.y -= delta * 0.22 * autoRotSpeed;
+      coronaField.rotation.z += delta * 0.15 * autoRotSpeed;
       
       // Pulse core physical glass sphere emissive intensity linked to confidence & latency breathing
       const physicalCorePower = 0.7 + (agentConfidence * 1.8);
@@ -3188,13 +3199,13 @@ export default function ThreeCanvas({
       coreMat.emissive.lerp(targetEmissiveColor, 3.0 * delta);
 
       // ─── DYNAMIC HOLOGRAPHIC COGNITIVE AVATAR ANIMATIONS ───
-      // Gently rotate and bob the holographic head representation
-      avatarGroup.rotation.y = time * 0.42;
-      avatarGroup.rotation.x = Math.sin(time * 0.6) * 0.12;
-      avatarGroup.position.y = Math.sin(time * 1.5) * 0.85;
+      // Gently rotate and bob the holographic head representation using animTime
+      avatarGroup.rotation.y = animTime * 0.42;
+      avatarGroup.rotation.x = Math.sin(animTime * 0.6) * 0.12;
+      avatarGroup.position.y = Math.sin(animTime * 1.5) * 0.85;
 
       // Vertical sweeping scanning biometric ring
-      const scanY = Math.sin(time * 2.0) * 5.8;
+      const scanY = Math.sin(animTime * 2.0) * 5.8;
       scanRingMesh.position.y = scanY;
 
       const isSpeaking = sendingChatRef.current;
@@ -3712,7 +3723,7 @@ export default function ThreeCanvas({
         const domainFrequency = 0.55 + (pr.index * 0.22); // Range [0.55, 2.53] Hz
         const directionFactor = pr.index % 2 === 0 ? 1.0 : -1.0;
 
-        const speedMult = resonanceFreqMultiplier;
+        const speedMult = resonanceFreqMultiplier * autoRotSpeed;
 
          // Layer 1: Outer Halo rotation (rotating independently around local Z axis)
         if (pr.outerHaloMesh) {

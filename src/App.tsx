@@ -26,6 +26,7 @@ import {
   Flame,
   Volume2,
   Lock,
+  Unlock,
   GitBranch,
   User,
   Search,
@@ -200,6 +201,7 @@ const INITIAL_AGENTS: AgentSpec[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin'>('presence');
   const [selectedRingIndex, setSelectedRingIndex] = useState(9); // Ars Regalis active by default
+  const [rotationLocked, setRotationLocked] = useState(false);
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
   
@@ -1464,6 +1466,38 @@ export default function App() {
                 
                 {/* 3D Visualization Canvas Side */}
                 <div id="viewport-box" className="xl:col-span-7 flex flex-col gap-4">
+                  {/* Viewport Control Utility Panel with Rotation Lock */}
+                  <div className="flex items-center justify-between bg-slate-900/40 border border-slate-900/80 px-4 py-2.5 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="text-[10px] font-mono font-bold tracking-wider text-slate-400 uppercase">
+                        SOLOMON SIGIL ACTIVE VIEWPORT
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setRotationLocked(!rotationLocked)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono font-bold transition-all duration-300 ${
+                        rotationLocked
+                          ? "bg-amber-950/20 border-amber-500/50 text-amber-300 shadow-md shadow-amber-950/20 hover:border-amber-400/70"
+                          : "bg-slate-950/60 border-slate-900 text-slate-400 hover:text-slate-100 hover:border-slate-750"
+                      }`}
+                      title={rotationLocked ? "Unlock Sigil Rotation" : "Lock Sigil Rotation"}
+                    >
+                      {rotationLocked ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          <span>ROTATION LOCKED</span>
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>ROTATION ACTIVE</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
                   <div className="flex-1 min-h-[320px] lg:min-h-[460px]">
                     <ThreeCanvas 
                       selectedRingIndex={selectedRingIndex}
@@ -1475,6 +1509,7 @@ export default function App() {
                       telemetryData={telemetryData}
                       sendingChat={sendingChat}
                       isListeningMic={isListeningMic}
+                      rotationLocked={rotationLocked}
                     />
                   </div>
 
