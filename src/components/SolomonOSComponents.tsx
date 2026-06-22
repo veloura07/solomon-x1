@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Coins, 
   Cpu, 
@@ -19,8 +19,23 @@ import {
   Sparkles,
   Zap,
   TrendingUp,
-  Award
+  Award,
+  ShieldAlert,
+  Plus,
+  Trash
 } from "lucide-react";
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend 
+} from "recharts";
 import { AgentSpec, AuditLog } from "../types";
 
 // ==========================================
@@ -41,6 +56,37 @@ export function CognitiveResourceEconomy({
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferMessage, setTransferMessage] = useState("");
   const [globalRingSync, setGlobalRingSync] = useState(true);
+
+  // States & helper data structures for Recharts Visual Telemetry Dashboard
+  const [selectedAgentChartIndex, setSelectedAgentChartIndex] = useState<number>(0);
+  const [dashboardTab, setDashboardTab] = useState<"compare" | "historical">("compare");
+  
+  const currentAgent = agents[selectedAgentChartIndex] || agents[0];
+  const reputation = currentAgent?.reputationScore || 90;
+  const tokens = currentAgent?.tokenPool || 1000;
+  
+  const agentHistory = [
+    { time: "30m ago", tokens: Math.round(tokens * 0.92), rep: Math.max(70, reputation - 1.8) },
+    { time: "25m ago", tokens: Math.round(tokens * 0.97), rep: Math.max(70, reputation - 1.4) },
+    { time: "20m ago", tokens: Math.round(tokens * 1.04), rep: Math.max(70, reputation - 1.0) },
+    { time: "15m ago", tokens: Math.round(tokens * 0.98), rep: Math.max(70, reputation - 0.5) },
+    { time: "10m ago", tokens: Math.round(tokens * 1.02), rep: Math.max(70, reputation - 0.2) },
+    { time: "05m ago", tokens: Math.round(tokens * 0.95), rep: reputation - 0.1 },
+    { time: "Active", tokens: tokens, rep: reputation }
+  ];
+
+  const aggregateData = [
+    { name: "Almadel", tokens: agents[0]?.tokenPool || 1200, rep: agents[0]?.reputationScore || 98 },
+    { name: "Notoria", tokens: agents[1]?.tokenPool || 900, rep: agents[1]?.reputationScore || 92 },
+    { name: "Paulina", tokens: agents[2]?.tokenPool || 800, rep: agents[2]?.reputationScore || 89 },
+    { name: "Goetia", tokens: agents[3]?.tokenPool || 1100, rep: agents[3]?.reputationScore || 95 },
+    { name: "Theurgia", tokens: agents[4]?.tokenPool || 750, rep: agents[4]?.reputationScore || 87 },
+    { name: "Almiras", tokens: agents[5]?.tokenPool || 950, rep: agents[5]?.reputationScore || 94 },
+    { name: "Verum", tokens: agents[6]?.tokenPool || 1300, rep: agents[6]?.reputationScore || 99 },
+    { name: "Ephesia", tokens: agents[7]?.tokenPool || 850, rep: agents[7]?.reputationScore || 90 },
+    { name: "Fulcanelli", tokens: agents[8]?.tokenPool || 1050, rep: agents[8]?.reputationScore || 96 },
+    { name: "Regalis", tokens: agents[9]?.tokenPool || 1260, rep: agents[9]?.reputationScore || 98 }
+  ];
 
   const toggleRingSync = () => {
     const nextVal = !globalRingSync;
@@ -160,6 +206,125 @@ export function CognitiveResourceEconomy({
             STABLE EQUILIBRIUM
           </span>
         </div>
+      </div>
+
+      {/* HISTORICAL RECHARTS TELEMETRY DASHBOARD */}
+      <div id="economy-historical-charts" className="bg-slate-950/80 border border-slate-800/80 p-5 rounded-2xl space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-900 pb-4">
+          <div>
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-widest flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-purple-400" />
+              Senate & Resource Telemetry Dashboard
+            </h3>
+            <p className="text-[10px] text-slate-500 mt-1 leading-normal uppercase">
+              Dynamic historical token drift and system-wide reputation audits
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setDashboardTab("compare")}
+              className={`h-7 px-3 rounded-lg text-[9px] font-bold font-mono transition-all ${
+                dashboardTab === "compare" 
+                  ? "bg-purple-600/20 border border-purple-500/40 text-purple-300"
+                  : "bg-slate-900 border border-slate-850 hover:border-slate-800 text-slate-400"
+              }`}
+            >
+              System Comparison
+            </button>
+            <button
+              onClick={() => setDashboardTab("historical")}
+              className={`h-7 px-3 rounded-lg text-[9px] font-bold font-mono transition-all ${
+                dashboardTab === "historical" 
+                  ? "bg-purple-600/20 border border-purple-500/40 text-purple-300"
+                  : "bg-slate-900 border border-slate-850 hover:border-slate-800 text-slate-400"
+              }`}
+            >
+              Agent Micro-Audit
+            </button>
+          </div>
+        </div>
+
+        {dashboardTab === "compare" ? (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="h-64 sm:h-72 w-full text-[10px] font-sans">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={aggregateData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#101827" />
+                  <XAxis dataKey="name" stroke="#64748b" tickLine={false} />
+                  <YAxis yAxisId="left" stroke="#eab308" tickLine={false} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#c084fc" tickLine={false} domain={[60, 100]} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: "12px", color: "#f1f5f9" }}
+                    itemStyle={{ fontSize: "11px", fontFamily: "monospace" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "10px", paddingBottom: "5px" }} />
+                  <Bar yAxisId="left" dataKey="tokens" name="Allocated Tokens" fill="#eab308" radius={[4, 4, 0, 0]} opacity={0.8} />
+                  <Bar yAxisId="right" dataKey="rep" name="Reputation Score %" fill="#c084fc" radius={[4, 4, 0, 0]} opacity={0.65} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[9px] text-slate-500 font-mono text-center uppercase tracking-wide">
+              * Real-time comparison showing token allocation (left scale, gold) against current reputation parameters (right scale, purple)
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center animate-fadeIn">
+            {/* Left controller: list of ring agents */}
+            <div className="lg:col-span-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wide block mb-1">Select Ring Agent to Audit</span>
+              {agents.map((ag) => (
+                <button
+                  key={ag.index}
+                  onClick={() => setSelectedAgentChartIndex(ag.index)}
+                  className={`w-full p-2.5 text-left border rounded-xl transition-all flex items-center justify-between text-[10px] ${
+                    selectedAgentChartIndex === ag.index
+                      ? "bg-purple-950/25 border-purple-500/40 text-purple-200"
+                      : "bg-slate-900/40 border-slate-900 hover:border-slate-800 text-slate-400"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#" + ag.bandColor.toString(16) }} />
+                    <span className="font-semibold">{ag.name}</span>
+                  </div>
+                  <span className="font-mono">{ag.tokenPool} T</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Right detailed plots */}
+            <div className="lg:col-span-8 space-y-3">
+              <div className="flex justify-between items-center bg-slate-950/60 p-2.5 px-3.5 border border-slate-850 rounded-xl">
+                <span className="text-[10px] font-bold text-slate-200 uppercase">{currentAgent?.name} - {currentAgent?.roleDescription}</span>
+                <span className="text-[9px] text-[#eab308] font-mono">Current Pool: {currentAgent?.tokenPool} Tokens</span>
+              </div>
+
+              <div className="h-44 sm:h-48 w-full text-[10px] font-sans">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={agentHistory} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#eab308" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorRep" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#101827" />
+                    <XAxis dataKey="time" stroke="#64748b" tickLine={false} />
+                    <YAxis yAxisId="t" stroke="#eab308" tickLine={false} />
+                    <YAxis yAxisId="r" orientation="right" stroke="#22c55e" tickLine={false} domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ backgroundColor: "#020617", borderColor: "#1e293b", borderRadius: "12px", color: "#f1f5f9" }} />
+                    <Area yAxisId="t" type="monotone" dataKey="tokens" name="Allocated tokens" stroke="#eab308" fillOpacity={1} fill="url(#colorTokens)" />
+                    <Area yAxisId="r" type="monotone" dataKey="rep" name="Reputation Drift" stroke="#22c55e" fillOpacity={1} fill="url(#colorRep)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -336,18 +501,44 @@ interface Layer0FirewallProps {
 
 export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
   const [isHardening, setIsHardening] = useState(false);
+  const [isGlitching, setIsGlitching] = useState(false);
+  
+  // Real active counters
+  const [greenChecked, setGreenChecked] = useState(921);
+  const [yellowGated, setYellowGated] = useState(14);
+  const [redHalted, setRedHalted] = useState(0);
+
+  // Violations feed
   const [violations, setViolations] = useState([
     { id: "violation_1", timestamp: "32m ago", agent: "Ars Paulina Sandbox", action: "ATTEMPTED_FS_WRITE_OUTOFBOUND", severity: "WARN_GATED", ruleMatched: "RULE_02_RESTRICTED_DISK" },
     { id: "violation_2", timestamp: "1h ago", agent: "L1 Network Enclave", action: "NON_ECC_HANDSHAKE_P2P", severity: "CLEARED_AUTOMATICALLY", ruleMatched: "RULE_09_CORRECT_PARITY" }
   ]);
 
-  // Doubt Engine State tracking
-  const [doubtItems, setDoubtItems] = useState([
-    { id: "f_1", claim: "DuckDB local cache indices are completely validated", confidence: 0.94, verAge: "12m", contradictionVelocity: "Low", index: 0.12, status: "GREEN" },
-    { id: "f_2", claim: "Biometric sensor telemetry packet parities match sovereign master seed", confidence: 0.54, verAge: "1m", contradictionVelocity: "High", index: 0.62, status: "YELLOW" },
-    { id: "f_3", claim: "External server webhook is certified secure SSL key exchange", confidence: 0.22, verAge: "5s", contradictionVelocity: "Critical", index: 0.88, status: "RED" }
+  // Predefined or custom rules matrix
+  const [rules, setRules] = useState([
+    { id: "rule_1", code: "RULE_02_RESTRICTED_DISK", agent: "Ars Paulina Sandbox", action: "BLOCK_&_WARN", active: true },
+    { id: "rule_2", code: "RULE_09_CORRECT_PARITY", agent: "L1 Network Enclave", action: "RESOLVE_ECC", active: true },
+    { id: "rule_3", code: "RULE_04_SOCKET_SHIELD", agent: "Verum Trust Hub", action: "SILENT_DROP", active: true }
   ]);
 
+  // Custom Rule Form states
+  const [newRuleCode, setNewRuleCode] = useState("");
+  const [newRuleAgent, setNewRuleAgent] = useState("Almadel Core Layer");
+  const [newRuleAction, setNewRuleAction] = useState("QUARANTINE_PROCESS");
+
+  // Doubt Engine State tracking
+  const [doubtItems, setDoubtItems] = useState([
+    { id: "f_1", claim: "DuckDB local cache indices are completely validated", confidence: 0.94, verAge: "12m", contradictionVelocity: "Low", index: 0.12, status: "GREEN" as const },
+    { id: "f_2", claim: "Biometric sensor telemetry packet parities match sovereign master seed", confidence: 0.54, verAge: "1m", contradictionVelocity: "High", index: 0.62, status: "YELLOW" as const },
+    { id: "f_3", claim: "External server webhook is certified secure SSL key exchange", confidence: 0.22, verAge: "5s", contradictionVelocity: "Critical", index: 0.88, status: "RED" as const }
+  ]);
+
+  // Submission of new custom claim
+  const [newClaim, setNewClaim] = useState("");
+  const [evalStep, setEvalStep] = useState("");
+  const [isEvaluatingClaim, setIsEvaluatingClaim] = useState(false);
+
+  // Trigger shield hardening
   const triggerShieldHardening = () => {
     setIsHardening(true);
     setTimeout(() => {
@@ -357,19 +548,21 @@ export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
         status: "AUTHORIZED",
         details: "Refreshed live enclave rules blocklist. Isolated red pipelines."
       });
+      setGreenChecked(c => c + Math.floor(Math.random() * 30 + 15));
       setIsHardening(false);
     }, 1500);
   };
 
+  // Recheck fact
   const triggerFactRecheck = (id: string) => {
     setDoubtItems(prev => prev.map(item => {
       if (item.id === id) {
         return {
           ...item,
-           verAge: "Just now",
-           confidence: Math.min(0.99, item.confidence + 0.15),
-           index: Math.max(0.1, item.index - 0.2),
-           status: item.index - 0.2 < 0.4 ? "GREEN" as const : "YELLOW" as const
+          verAge: "Just now",
+          confidence: Math.min(0.99, item.confidence + 0.15),
+          index: Math.max(0.04, item.index - 0.18),
+          status: (item.index - 0.18) <= 0.35 ? ("GREEN" as const) : ("YELLOW" as const)
         };
       }
       return item;
@@ -383,9 +576,141 @@ export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
     });
   };
 
+  // Submit custom claim simulation
+  const handleAddClaim = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClaim.trim()) return;
+
+    setIsEvaluatingClaim(true);
+    setEvalStep("DESTRUCTURING HEURISTIC SIGNATURES...");
+
+    setTimeout(() => {
+      setEvalStep("CROSS-COMPILING AMBIGUITIES...");
+      setTimeout(() => {
+        setEvalStep("CALCULATING CONTRADICTION DENSITY...");
+        setTimeout(() => {
+          // Absolute word penalty mapping
+          const hasAbsolute = /\b(always|never|absolute|perfect|100%|infinite|all|nothing|flawless|completely)\b/i.test(newClaim);
+          const calculatedIndex = hasAbsolute 
+            ? 0.70 + Math.random() * 0.25 
+            : 0.15 + Math.random() * 0.45;
+          const confidence = 1 - calculatedIndex;
+          
+          let statusVal: "GREEN" | "YELLOW" | "RED" = "GREEN";
+          if (calculatedIndex > 0.65) statusVal = "RED";
+          else if (calculatedIndex > 0.35) statusVal = "YELLOW";
+
+          const contradictionVelocity = calculatedIndex > 0.65 ? "Critical" : calculatedIndex > 0.35 ? "High" : "Low";
+
+          const addedItem = {
+            id: `f_user_${Date.now().toString().slice(-4)}`,
+            claim: newClaim,
+            confidence: Math.round(confidence * 100) / 100,
+            verAge: "1s ago",
+            contradictionVelocity,
+            index: Math.round(calculatedIndex * 100) / 100,
+            status: statusVal
+          };
+
+          setDoubtItems(prev => [addedItem, ...prev]);
+          
+          onAddAuditLog({
+            actor: "Epistemic Core",
+            action: "RESOLVE_PROPOSITION_TRUST",
+            status: statusVal === "RED" ? "BLOCKED_HALLUCINATION" : "AUTHORIZED",
+            details: `Constructed Epistemic disbelief profile for user contention. EDI evaluated to ${addedItem.index.toFixed(2)}.`
+          });
+
+          setNewClaim("");
+          setIsEvaluatingClaim(false);
+          setEvalStep("");
+        }, 600);
+      }, 600);
+    }, 600);
+  };
+
+  // Rule creation helper
+  const handleCreateRule = (e: React.FormEvent) => {
+    e.preventDefault();
+    const candidateCode = newRuleCode.trim().toUpperCase().replace(/\s+/g, "_");
+    if (!candidateCode) return;
+
+    const newRule = {
+      id: `rule_${Date.now()}`,
+      code: candidateCode.startsWith("RULE_") ? candidateCode : `RULE_MX_${candidateCode}`,
+      agent: newRuleAgent,
+      action: newRuleAction,
+      active: true
+    };
+
+    setRules(prev => [...prev, newRule]);
+    onAddAuditLog({
+      actor: "Constitution Root",
+      action: "REGISTER_ENCLAVE_RULE",
+      status: "SEALED",
+      details: `Injected custom state policy ${newRule.code} into ${newRule.agent} dynamic gater.`
+    });
+
+    setNewRuleCode("");
+  };
+
+  // Toggle rule status helper
+  const toggleRule = (id: string, code: string, active: boolean) => {
+    setRules(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r));
+    onAddAuditLog({
+      actor: "Constitution Root",
+      action: active ? "DEACTIVATE_POLICY_CLAMP" : "ENGAGE_POLICY_CLAMP",
+      status: "AUTHORIZED",
+      details: `User unsealed policy rule ${code}. Replaced dynamic routing parameters.`
+    });
+  };
+
+  // Simulate threat run
+  const triggerManualThreatSimulation = () => {
+    setIsGlitching(true);
+    onAddAuditLog({
+      actor: "Sovereign Intrusion Monitor",
+      action: "DETECT_ANOMALY_IP_BURST",
+      status: "MITIGATED",
+      details: "Detected recursive non-cryptographic peer handshake packets on port 443."
+    });
+
+    setTimeout(() => {
+      // Find a random active rule to trigger violation
+      const activeRules = rules.filter(r => r.active);
+      const ruleToMatch = activeRules[Math.floor(Math.random() * activeRules.length)] || rules[0];
+
+      const newViolation = {
+        id: `violation_user_${Date.now()}`,
+        timestamp: "Just now",
+        agent: ruleToMatch.agent,
+        action: "SUSPICIOUS_PROBING_DETECTED",
+        severity: ruleToMatch.action === "SILENT_DROP" ? "BLOCKED_SILENT" : "QUARANTINED",
+        ruleMatched: ruleToMatch.code
+      };
+
+      setViolations(prev => [newViolation, ...prev]);
+      setYellowGated(y => y + 1);
+      setRedHalted(r => r + 1);
+
+      setIsGlitching(false);
+    }, 1200);
+  };
+
   return (
-    <div className="space-y-6 font-mono text-slate-300">
+    <div className={`space-y-6 font-mono text-slate-300 relative transition-all duration-300 ${isGlitching ? 'ring-2 ring-red-500/50 bg-red-950/10' : ''}`}>
       
+      {/* GLITCH OVERLAY INDICATOR */}
+      {isGlitching && (
+        <div className="absolute inset-0 z-50 bg-red-950/40 backdrop-blur-[2px] flex flex-col items-center justify-center border-2 border-red-500 border-dashed animate-pulse text-red-400 p-8">
+          <ShieldAlert className="w-12 h-12 text-red-500 animate-bounce mb-3" />
+          <span className="text-sm font-extrabold tracking-widest uppercase">SIMULATING LIVE COMPLIANCE THREAT</span>
+          <p className="text-[10px] text-red-400/80 mt-1 max-w-sm text-center uppercase tracking-wider">
+            Sovereign sentinel injecting non-parity test load to evaluate containment matrices.
+          </p>
+        </div>
+      )}
+
       {/* SHIELD STATS BAR */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl">
@@ -402,27 +727,32 @@ export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
             <span className="text-[10px] text-slate-500 font-bold uppercase">CONSTITUTIONAL CORES</span>
             <span className="text-[9px] text-emerald-400 font-bold">100% SEALED</span>
           </div>
-          <p className="text-xl font-bold font-sans text-slate-100 mt-2">Zero Red Breaches</p>
+          <p className="text-xl font-bold font-sans text-slate-100 mt-2">{redHalted} Red Breaches</p>
           <span className="text-[9px] text-slate-500 block mt-1">EVALUATING SYSTEM TRACE STREAM</span>
         </div>
 
         <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500 font-bold uppercase">DOUBT COEFFICIENT</span>
-            <span className="text-[9px] text-orange-400 font-bold font-sans">Index avg: 0.54</span>
+            <span className="text-[9px] text-orange-400 font-bold font-sans">
+              EDI Targets: {doubtItems.length}
+            </span>
           </div>
-          <p className="text-xl font-bold font-sans text-orange-400 mt-2">3 Epistemic Targets</p>
+          <p className="text-xl font-bold font-sans text-orange-400 mt-2">
+            {(doubtItems.reduce((acc, i) => acc + i.index, 0) / doubtItems.length).toFixed(3)} EDI
+          </p>
           <span className="text-[9px] text-slate-500 block mt-1">VERIFYING EXTERNAL SEED TRUSTS</span>
         </div>
 
-        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl">
+        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl grid grid-cols-1 gap-2 border-dashed">
           <button 
+            type="button"
             onClick={triggerShieldHardening}
-            disabled={isHardening}
-            className="w-full h-full bg-purple-900/30 border border-purple-500/20 hover:border-purple-500/45 rounded-xl text-center flex flex-col items-center justify-center p-3 text-purple-300 font-bold gap-1.5 transition active:scale-[0.98]"
+            disabled={isHardening || isGlitching}
+            className="w-full bg-purple-900/30 hover:bg-purple-900/40 border border-purple-500/20 hover:border-purple-500/45 rounded-xl text-center flex flex-col items-center justify-center p-2 text-purple-300 font-bold gap-1 transition active:scale-[0.98] cursor-pointer"
           >
-            <ShieldCheck className={`w-5 h-5 text-purple-400 ${isHardening ? 'animate-spin' : ''}`} />
-            <span>{isHardening ? "HARDENING..." : "FORCE COGNITIVE SHIELD"}</span>
+            <ShieldCheck className={`w-4 h-4 text-purple-400 ${isHardening ? 'animate-spin' : ''}`} />
+            <span className="text-[9px] uppercase tracking-wider">{isHardening ? "HARDENING..." : "FORCE COGNITIVE SHIELD"}</span>
           </button>
         </div>
       </div>
@@ -430,45 +760,129 @@ export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
         {/* FIREWALL RULE TABLE & ALERTS */}
-        <div id="enclave-actions-list" className="lg:col-span-6 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
+        <div id="enclave-actions-list" className="lg:col-span-6 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-emerald-400" />
                 CONSTITUTIONAL FIREWALL RULE MATRIX
               </span>
-              <span className="text-[9px] text-orange-400 font-bold uppercase bg-orange-400/5 px-2 py-0.5 rounded border border-orange-500/20">
+              <span className="text-[9px] text-orange-400 font-bold uppercase bg-orange-400/5 px-2 py-0.5 rounded border border-orange-500/20 animate-pulse">
                 Live monitoring
               </span>
             </div>
 
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3">
               {/* Green Yellow Red indicator strip */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-2.5 text-center">
                   <span className="text-[9px] text-slate-500 font-bold block uppercase mb-1">GREEN LIGHT</span>
-                  <span className="text-xs font-bold text-emerald-400">921 Checked</span>
+                  <span className="text-xs font-bold text-emerald-400">{greenChecked} Checked</span>
                 </div>
                 <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-2.5 text-center">
                   <span className="text-[9px] text-slate-500 font-bold block uppercase mb-1">YELLOW WARN</span>
-                  <span className="text-xs font-bold text-yellow-400">14 Gated</span>
+                  <span className="text-xs font-bold text-yellow-400">{yellowGated} Gated</span>
                 </div>
                 <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-2.5 text-center">
                   <span className="text-[9px] text-slate-500 font-bold block uppercase mb-1">RED HALTED</span>
-                  <span className="text-xs font-bold text-red-400">0 Liquidated</span>
+                  <span className="text-xs font-bold text-red-500">{redHalted} Halted</span>
                 </div>
               </div>
 
+              {/* Dynamic Interactive Active Rules Matrix */}
+              <div className="border-t border-slate-850 pt-3 space-y-2">
+                <span className="text-[9px] text-slate-500 font-semibold block uppercase">Active Security Assertions ({rules.length})</span>
+                <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                  {rules.map((rule) => (
+                    <div key={rule.id} className="p-2 bg-slate-950/60 border border-slate-850 rounded-lg flex items-center justify-between text-[11px]">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`w-1.5 h-1.5 rounded-full ${rule.active ? "bg-emerald-400" : "bg-slate-600"}`} />
+                          <span className={`font-mono text-[9px] font-bold ${rule.active ? "text-purple-300" : "text-slate-500 line-through"}`}>{rule.code}</span>
+                        </div>
+                        <span className="text-[8px] text-slate-500 block">Agent: {rule.agent} • Policy: {rule.action}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleRule(rule.id, rule.code, rule.active)}
+                        className={`px-2 h-5.5 rounded text-[8px] font-bold transition flex items-center gap-0.5 cursor-pointer ${
+                          rule.active 
+                            ? "bg-emerald-950/40 hover:bg-emerald-950 border border-emerald-500/20 text-emerald-400" 
+                            : "bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-500"
+                        }`}
+                      >
+                        {rule.active ? "CLAMPED" : "UNCLAMPED"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rule Addition Block */}
+              <form onSubmit={handleCreateRule} className="p-3 bg-slate-950/80 border border-slate-850 rounded-xl space-y-2 text-[10px]">
+                <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wide">ADD CONSTITUTIONAL RULE ENCLAVE</span>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[8px] text-slate-500 font-bold block">TARGET AGENT</label>
+                    <select
+                      value={newRuleAgent}
+                      onChange={(e) => setNewRuleAgent(e.target.value)}
+                      className="w-full h-7 bg-slate-900 border border-slate-800 rounded px-1.5 text-[9px] text-slate-300 outline-none"
+                    >
+                      <option value="Almadel Core Layer">Almadel Core</option>
+                      <option value="Ars Paulina Sandbox">Ars Paulina</option>
+                      <option value="Notoria Crypt Layer">Ars Notoria</option>
+                      <option value="Goetia Daemon Ring">Ars Goetia</option>
+                      <option value="Fulcanelli Alch Core">Fulcanelli</option>
+                      <option value="Verum Trust Hub">Verum Trust Hub</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[8px] text-slate-500 font-bold block">PENALTY ACTION</label>
+                    <select
+                      value={newRuleAction}
+                      onChange={(e) => setNewRuleAction(e.target.value)}
+                      className="w-full h-7 bg-slate-900 border border-slate-800 rounded px-1.5 text-[9px] text-slate-300 outline-none"
+                    >
+                      <option value="QUARANTINE_PROCESS">QUARANTINE PROCESS</option>
+                      <option value="BLOCK_&_WARN">BLOCK & WARN</option>
+                      <option value="SILENT_DROP">SILENT DROP</option>
+                      <option value="REDUCE_ACCURACY">REDUCE ACCURACY</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. RULE_MAX_MEMORY_PRESSURE"
+                    value={newRuleCode}
+                    onChange={(e) => setNewRuleCode(e.target.value)}
+                    className="flex-1 h-7 bg-slate-900 border border-slate-800 rounded px-2 text-[9px] text-slate-300 outline-none focus:border-purple-500/45"
+                  />
+                  <button 
+                    type="submit"
+                    className="h-7 px-3 bg-purple-600 hover:bg-purple-500 text-[10px] font-bold text-slate-100 rounded flex items-center gap-1 cursor-pointer transition active:scale-[0.98]"
+                  >
+                    <Plus className="w-3 h-3" />
+                    INJECT
+                  </button>
+                </div>
+              </form>
+
               <div className="border-t border-slate-850 pt-3">
-                <span className="text-[9px] text-slate-500 font-semibold block uppercase mb-2">INTEGRITY THREAT VIOLATIONS FEED</span>
-                <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                <span className="text-[9px] text-slate-500 font-semibold block uppercase mb-2">INTEGRITY THREAT VIOLATIONS FEED ({violations.length})</span>
+                <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
                   {violations.map((v) => (
-                    <div key={v.id} className="p-2.5 rounded-lg bg-slate-950/40 border border-slate-850 text-[10px] leading-relaxed">
+                    <div key={v.id} className="p-2.5 rounded-lg bg-slate-950/40 border border-slate-850 text-[10px] leading-normal animate-fadeIn">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-orange-400 font-bold uppercase">{v.action}</span>
+                        <span className="text-orange-400 font-bold tracking-wide font-mono text-[9px] uppercase">{v.action}</span>
                         <span className="text-[8px] text-slate-500 font-mono">{v.timestamp}</span>
                       </div>
-                      <p className="text-slate-400">Source Agent: <span className="text-slate-200">{v.agent}</span> matched rule <span className="text-purple-400">{v.ruleMatched}</span></p>
+                      <p className="text-slate-400 text-[9px]">Source Agent: <span className="text-slate-200">{v.agent}</span> matched rule <span className="text-purple-400">{v.ruleMatched}</span></p>
                       <span className="mt-1 inline-block text-[8px] font-bold px-1.5 py-0.2 rounded bg-orange-400/10 text-orange-400 font-sans">{v.severity}</span>
                     </div>
                   ))}
@@ -476,36 +890,86 @@ export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
               </div>
             </div>
           </div>
+
+          <div className="pt-2 border-t border-slate-850">
+            <button
+              type="button"
+              onClick={triggerManualThreatSimulation}
+              disabled={isGlitching || isHardening}
+              className="w-full h-8.5 bg-red-950/20 border border-red-500/40 hover:bg-red-950/30 text-red-450 text-[9px] font-bold rounded-xl transition flex items-center justify-center gap-1.5 tracking-wider uppercase font-mono cursor-pointer"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+              INJECT TEST INTRUSION FAULT LOAD
+            </button>
+          </div>
         </div>
 
-        {/* DOUBT ENGINE VISIVAL FEED */}
-        <div id="doubt-engine-chamber" className="lg:col-span-6 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
+        {/* DOUBT ENGINE COGNITIVE CONSOLE */}
+        <div id="doubt-engine-chamber" className="lg:col-span-6 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-orange-400" />
                 EPISTEMIC DOUBT ENGINE CORE
               </span>
-              <span className="text-[8px] text-slate-500 font-mono">DISBELIEF MONITOR</span>
+              <span className="text-[8px] text-slate-500 font-mono tracking-widest uppercase">DISBELIEF MONITOR</span>
             </div>
 
-            <p className="text-[11px] text-slate-400 mb-4 leading-normal">
-              Solomon X refuses to hallucinate. The Doubt Engine computes an <span className="text-slate-200 font-semibold">Epistemic Disbelief Index (EDI)</span> for every synthesized proposition.
+            <p className="text-[11px] text-slate-400 leading-relaxed font-mono">
+              The Doubt Engine computes an <span className="text-slate-200 font-semibold">Epistemic Disbelief Index (EDI)</span> to evaluate logic validity. Absolute generalizations decrease belief density.
             </p>
 
-            <div className="space-y-3">
+            {/* Claim input box */}
+            <form onSubmit={handleAddClaim} className="p-3.5 bg-slate-950/70 border border-slate-850 rounded-xl space-y-2.5 text-[10px]">
+              <span className="text-[9px] text-purple-400 font-bold block uppercase tracking-wide">SUBMIT CONTENTION FOR HEURISTIC REVIEW</span>
+              
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  disabled={isEvaluatingClaim}
+                  placeholder="e.g. Always fallback to local cache when network is offline..."
+                  value={newClaim}
+                  onChange={(e) => setNewClaim(e.target.value)}
+                  className="flex-1 h-8 bg-slate-900 border border-slate-800 rounded px-2.5 text-[10px] text-slate-300 outline-none focus:border-purple-500/40 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={isEvaluatingClaim || !newClaim.trim()}
+                  className="h-8 px-3.5 bg-purple-600 hover:bg-purple-500 text-slate-100 rounded text-[9px] font-bold text-center tracking-wider transition font-mono uppercase cursor-pointer disabled:opacity-40"
+                >
+                  AUDIT
+                </button>
+              </div>
+
+              {isEvaluatingClaim && (
+                <div className="pt-2 flex items-center gap-2 animate-fadeIn">
+                  <RefreshCw className="w-3.5 h-3.5 text-purple-400 animate-spin flex-shrink-0" />
+                  <span className="text-[8px] uppercase font-bold text-purple-400 animate-pulse tracking-wide font-mono">
+                    {evalStep}
+                  </span>
+                </div>
+              )}
+            </form>
+
+            <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
               {doubtItems.map((item) => {
                 const isGreen = item.status === "GREEN";
                 const isYellow = item.status === "YELLOW";
                 return (
-                  <div key={item.id} className="p-3 bg-slate-950/70 border border-slate-850 rounded-xl hover:border-slate-800 transition text-[11px] space-y-2">
+                  <div key={item.id} className="p-3 bg-slate-950/70 border border-slate-850 rounded-xl hover:border-slate-800 transition text-[11px] space-y-2 relative overflow-hidden animate-fadeIn">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-slate-900/5 rotate-45 pointer-events-none" />
+                    
                     <div className="flex items-start justify-between gap-3">
                       <p className="font-semibold text-slate-200 text-xs leading-normal">{item.claim}</p>
-                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded font-sans ${
-                        isGreen ? "bg-emerald-500/10 text-emerald-400" : isYellow ? "bg-yellow-500/10 text-yellow-400" : "bg-red-500/10 text-red-400"
-                      }`}>
-                        EDI: {item.index.toFixed(2)}
-                      </span>
+                      <div className="text-right flex-shrink-0">
+                        <span className={`inline-block text-[9px] font-extrabold px-1.5 py-0.5 rounded font-mono ${
+                          isGreen ? "bg-emerald-500/10 text-emerald-400" : isYellow ? "bg-yellow-500/10 text-yellow-400" : "bg-red-500/10 text-red-500"
+                        }`}>
+                          EDI: {item.index.toFixed(2)}
+                        </span>
+                        <span className="block text-[7px] text-slate-500 mt-0.5 uppercase tracking-tight">{item.id}</span>
+                      </div>
                     </div>
 
                     <div className="flex justify-between text-[9px] text-slate-500 font-mono">
@@ -514,20 +978,22 @@ export function Layer0Firewall({ onAddAuditLog }: Layer0FirewallProps) {
                     </div>
 
                     {/* Progress tracking bar */}
-                    <div className="h-1 bg-slate-800 rounded-full overflow-hidden flex">
+                    <div className="h-1 bg-slate-850 rounded-full overflow-hidden flex">
                       <div 
-                        className={`h-full rounded-full ${isGreen ? "bg-emerald-500" : isYellow ? "bg-yellow-500" : "bg-red-500"}`}
+                        className={`h-full rounded-full transition-all duration-300 ${isGreen ? "bg-emerald-500" : isYellow ? "bg-yellow-500" : "bg-red-550"}`}
                         style={{ width: `${item.confidence * 100}%` }}
                       />
                     </div>
 
-                    <div className="flex justify-end pt-1">
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-[8px] text-slate-500 font-bold uppercase font-mono">Confidence Level: {Math.round(item.confidence * 100)}%</span>
                       <button 
+                        type="button"
                         onClick={() => triggerFactRecheck(item.id)}
-                        className="h-6 px-2 bg-slate-900 border border-slate-800 rounded text-[9px] font-bold text-slate-400 hover:text-purple-300 hover:border-purple-500/20 transition flex items-center gap-1"
+                        className="h-6 px-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded text-[9px] font-bold text-slate-400 hover:text-purple-300 hover:border-purple-500/25 transition flex items-center gap-1 cursor-pointer"
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
-                        RE-ESTABLISHED SEED VERIFICATION
+                        RE-ESTABLISH VERIFICATION
                       </button>
                     </div>
                   </div>

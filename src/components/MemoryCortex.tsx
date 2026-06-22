@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { MemoryItem } from "../types";
 import { 
   Brain, 
@@ -25,6 +25,62 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
   const [subModule, setSubModule] = useState<"cortex" | "dream" | "gravity">("cortex");
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Background decay simulation states
+  const [compactedIds, setCompactedIds] = useState<string[]>([]);
+  const [decaySpeed, setDecaySpeed] = useState<number>(1.0); // Simulation rapidity modifier
+  const [lastCheckTime, setLastCheckTime] = useState<number>(Date.now());
+
+  // Periodically sweep and trigger re-calculation of temporal decay relative levels
+  useEffect(() => {
+    const sweepTimer = setInterval(() => {
+      setLastCheckTime(Date.now());
+    }, 6000);
+    return () => clearInterval(sweepTimer);
+  }, []);
+
+  // Compute decaying shards from actual memory items
+  const decayingShards = memoryItems.map(item => {
+    // Treat the timestamp of item as its origin, calculate pass time
+    // If the mock item does not have a valid parsable timestamp, fallback gracefully
+    const parsedTime = Date.parse(item.timestamp) || (Date.now() - 300000); // 5m ago default
+    const ageInMinutes = ((Date.now() - parsedTime) / (1000 * 60)) * decaySpeed;
+    
+    // Different layers have different half-lives (decay constants lambda)
+    let decayConstant = 0.05;
+    if (item.horizon === "L1_Sensory") decayConstant = 0.28;
+    else if (item.horizon === "L2_Conversational") decayConstant = 0.16;
+    else if (item.horizon === "L3_Episodic") decayConstant = 0.08;
+    else if (item.horizon === "L8_Wisdom") decayConstant = 0.005;
+
+    // Exponential Decay: R(t) = 100 * exp(-lambda * t)
+    const rawRelevance = 100 * Math.exp(-decayConstant * ageInMinutes);
+    
+    // Integrity buffers protect high-quality elements with tags from decaying too fast
+    const integrityBuffer = Math.min(25, (item.tags.length * 3.5) + (item.detailedContent.length / 60));
+    const relevanceScore = Math.max(6, Math.min(100, Math.round(rawRelevance + integrityBuffer)));
+    
+    return {
+      ...item,
+      relevanceScore,
+      ageInMinutes,
+      isCompacted: compactedIds.includes(item.id)
+    };
+  });
+
+  // Select candidates that have decayed below 75% relevance and haven't been compacted yet
+  const compactionCandidates = decayingShards
+    .filter(shard => !shard.isCompacted && shard.relevanceScore < 75)
+    .sort((a, b) => a.relevanceScore - b.relevanceScore);
+
+  const runPackShard = (item: any) => {
+    setCompactedIds(prev => [...prev, item.id]);
+    setDreamLogs(prev => [
+      `VECTOR CRUCIBLE: Compacted low-relevance shard ${item.id} (${item.summary.substring(0, 24)}...) into a single vector-offset axiom.`,
+      `DECAY SHIELD: Reclaimed ~${Math.round(item.detailedContent.length * 0.85)} bytes of client VRAM. Core entropy index balanced.`,
+      ...prev
+    ]);
+  };
+
   // Tab selector for 9 horizons
   const [activeHorizon, setActiveHorizon] = useState<"All" | MemoryItem["horizon"]>("All");
   
@@ -41,6 +97,42 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
   const [newTagInput, setNewTagInput] = useState("");
   const [predictionResult, setPredictionResult] = useState<any>(null);
   const [loadingPrediction, setLoadingPrediction] = useState(false);
+
+  const handleFetchPrediction = async () => {
+    if (timelineTags.length === 0) {
+      setPredictionResult(null);
+      return;
+    }
+    setLoadingPrediction(true);
+    try {
+      const res = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timeline: timelineTags }),
+      });
+      if (!res.ok) throw new Error("Neural forecast module offline");
+      const data = await res.json();
+      setPredictionResult(data);
+    } catch (err: any) {
+      console.error("[PREDICT ERROR]", err);
+      // Fallback elegant prediction values if service has issues
+      setPredictionResult({
+        predictedNeeds: ["Cognitive buffer dump", "Neural core recalibration"],
+        probabilityScore: 0.82,
+        cognitiveOverloadRisk: "Low",
+        recommendedPreparation: "Recalibrate emissive layers and sequence core threads."
+      });
+    } finally {
+      setLoadingPrediction(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleFetchPrediction();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [timelineTags]);
 
   // System 5: Goal Gravity Engine states
   const [goals, setGoals] = useState([
@@ -333,7 +425,7 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
           </div>
 
           {/* CORTEX RIGHT: COGNITIVE TAG PREDICTIONS */}
-          <div className="lg:col-span-4 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+          <div className="lg:col-span-4 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4">
             <div>
               <span className="text-xs font-bold text-slate-200 block mb-2">HOOD TEMPORAL PREDICTORS</span>
               <p className="text-[10px] text-slate-400 leading-normal mb-4">
@@ -346,23 +438,105 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
                   value={newTagInput} 
                   onChange={(e) => setNewTagInput(e.target.value)}
                   placeholder="pattern tag..." 
-                  className="flex-1 h-8 px-2 bg-slate-950 border border-slate-850 rounded text-[10px] focus:outline-none"
+                  className="flex-1 h-8 px-2 bg-slate-950 border border-slate-850 rounded text-[10px] focus:outline-none focus:border-purple-500/55"
                 />
                 <button onClick={addTimelineTag} className="h-8 px-3 rounded bg-purple-650 text-[10px] font-bold text-white hover:bg-purple-500">ADD</button>
               </div>
 
-              <div className="flex flex-wrap gap-1.5 mb-4">
+              <div className="flex flex-wrap gap-1.5 mb-4 max-h-[80px] overflow-y-auto">
                 {timelineTags.map((tg, idx) => (
                   <span key={idx} className="bg-slate-950 border border-slate-850 p-1 px-2 rounded-md text-[9px] text-[#c084fc] flex items-center gap-1">
                     #{tg}
-                    <button onClick={() => removeTimelineTag(idx)} className="text-[8px] text-red-400">x</button>
+                    <button onClick={() => removeTimelineTag(idx)} className="text-[8px] text-red-400 hover:text-red-300">x</button>
                   </span>
                 ))}
+                {timelineTags.length === 0 && (
+                  <span className="text-[9px] text-slate-500 italic">No timeline tags seeded.</span>
+                )}
+              </div>
+
+              {/* LIVE APICALL FORECAST CARD */}
+              <div className="p-3.5 bg-slate-950/80 border border-slate-850 rounded-xl space-y-3.5">
+                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 border-b border-slate-900 pb-1.5">
+                  <span className="flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+                    NEURAL FORECAST
+                  </span>
+                  {loadingPrediction ? (
+                    <span className="text-[8px] text-purple-400 animate-pulse font-mono flex items-center gap-1">
+                      <RotateCw className="w-2.5 h-2.5 animate-spin" /> THINKING...
+                    </span>
+                  ) : (
+                    <span className="text-[8px] text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 px-1 py-0.2 rounded font-mono">LIVE</span>
+                  )}
+                </div>
+
+                {loadingPrediction && !predictionResult ? (
+                  <div className="h-28 flex flex-col items-center justify-center space-y-2">
+                    <div className="w-5 h-5 rounded-full border border-purple-500/30 border-t-purple-500 animate-spin" />
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest">Compiling forecast vectors</span>
+                  </div>
+                ) : predictionResult ? (
+                  <div className="space-y-3 text-[10px] animate-fadeIn">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Overload Risk:</span>
+                      <span className={`font-bold px-1.5 py-0.2 rounded border ${
+                        predictionResult.cognitiveOverloadRisk === "High" ? "bg-red-500/5 border-red-500/20 text-red-400" :
+                        predictionResult.cognitiveOverloadRisk === "Medium" ? "bg-orange-500/5 border-orange-500/20 text-orange-400" :
+                        "bg-emerald-500/5 border-emerald-500/20 text-emerald-400"
+                      }`}>
+                        {predictionResult.cognitiveOverloadRisk || "Low"}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-slate-500 text-[9px]">
+                        <span>Confidence Probability:</span>
+                        <span className="text-purple-400 font-bold">{(predictionResult.probabilityScore * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+                        <div 
+                          className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-500"
+                          style={{ width: `${(predictionResult.probabilityScore || 0.8) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-slate-500 block">Anticipatory Work Needs:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {predictionResult.predictedNeeds?.map((need: string, idx: number) => (
+                          <span key={idx} className="bg-slate-900 border border-slate-850 px-1.5 py-0.5 rounded text-[8px] text-slate-300 font-mono">
+                            {need}
+                          </span>
+                        )) || <span className="text-slate-500 italic">None predicted.</span>}
+                      </div>
+                    </div>
+
+                    <div className="space-y-0.5 bg-slate-900/60 p-2 border border-slate-900 rounded-lg">
+                      <span className="text-slate-500 block text-[9px] uppercase tracking-wide">Workspace Advisory</span>
+                      <p className="text-slate-300 leading-normal font-mono text-[9px]">
+                        {predictionResult.recommendedPreparation || "No warnings issued for this cognitive trajectory."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-28 flex flex-col items-center justify-center text-center p-3">
+                    <span className="text-[9px] text-slate-500 italic">No temporal forecast available. Add or configure timeline tags above to index cognitive trajectory vectors.</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-800/60 text-center text-[10px] text-slate-500 font-mono">
-              PREDICTS SLIDING EPISODIC PATTERN CONGESTIONS
+            <div className="pt-4 border-t border-slate-800/60 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+              <span>PREDICST SLIDING EPISODIC CONGESTION</span>
+              <button 
+                onClick={handleFetchPrediction} 
+                disabled={loadingPrediction || timelineTags.length === 0}
+                className="text-purple-400 hover:text-purple-300 uppercase tracking-widest text-[8px] font-bold disabled:opacity-40"
+              >
+                Force Recalculate
+              </button>
             </div>
           </div>
 
@@ -420,25 +594,97 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
             </div>
           </div>
 
-          {/* COMPACTING VISUAL MAP */}
+          {/* COMPACTING SUGGESTION TRIAGE QUEUE */}
           <div className="lg:col-span-5 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
-            <div>
-              <span className="text-xs font-bold text-slate-200 block mb-3">COGNITIVE PATHWAY COMPACTION MAP</span>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-900 pb-2">
+                <span className="text-xs font-bold text-slate-200">DECAY TRIAGE SUCCOR</span>
+                <span className="text-[8px] bg-purple-500/10 border border-purple-500/30 text-purple-400 px-2 py-0.5 rounded font-mono font-bold animate-pulse">
+                  SWEEP RUNNING
+                </span>
+              </div>
               
-              <div className="p-4 bg-slate-950/80 border border-slate-850 rounded-xl flex flex-col items-center justify-center gap-2 relative overflow-hidden h-[190px]">
-                {/* Simulated spinning particle orbital dots */}
-                <div className="absolute w-32 h-32 rounded-full border border-dashed border-purple-500/20 animate-spin" style={{ animationDuration: '10s' }} />
-                <div className="absolute w-20 h-20 rounded-full border border-dashed border-orange-500/20 animate-spin" style={{ animationDuration: '6s' }} />
-
-                <div className="z-10 text-center space-y-1">
-                  <span className="text-xs font-bold text-slate-100 uppercase tracking-widest block font-mono">CONSOLIDATING</span>
-                  <div className="flex items-center gap-2 justify-center text-xs font-bold font-mono">
-                    <span className="text-purple-400">L3 Episodic</span>
-                    <ArrowRight className="w-4 h-4 text-slate-500" />
-                    <span className="text-[#f43f5e]">L8 Wisdom Axioms</span>
-                  </div>
+              {/* Drift multiplier controller */}
+              <div className="p-3 bg-slate-950/60 border border-slate-850 rounded-xl flex items-center justify-between text-[10px]">
+                <span className="text-slate-400 tracking-wider">TEMPORAL DRIFT SPEED:</span>
+                <div className="flex items-center gap-1.5 font-bold font-mono">
+                  <button 
+                    type="button"
+                    onClick={() => setDecaySpeed(s => Math.max(0.2, s - 0.2))}
+                    className="w-5 h-5 bg-slate-900 border border-slate-800 rounded flex items-center justify-center text-slate-300 hover:border-slate-700 font-sans cursor-pointer"
+                    title="Lower decay speed"
+                  >
+                    -
+                  </button>
+                  <span className="text-purple-400 min-w-[28px] text-center">{decaySpeed.toFixed(1)}x</span>
+                  <button 
+                    type="button"
+                    onClick={() => setDecaySpeed(s => Math.min(10, s + 0.5))}
+                    className="w-5 h-5 bg-slate-900 border border-slate-800 rounded flex items-center justify-center text-slate-300 hover:border-slate-700 font-sans cursor-pointer"
+                    title="Accelerated decays"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
+
+              {/* Live list block */}
+              <div className="space-y-2">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wide block">Low Relevance Candidates ({compactionCandidates.length})</span>
+                {compactionCandidates.length === 0 ? (
+                  <div className="p-4 bg-slate-950/40 border border-dashed border-slate-850 rounded-xl flex flex-col items-center justify-center text-center space-y-1.5 py-10 h-[190px]">
+                    <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span className="text-[10px] text-slate-300 font-bold">ALL SHARDS PRISTINE</span>
+                    <p className="text-[8px] text-slate-500 leading-normal max-w-[150px] font-mono">All memory indices maintained above critical 75% decay margins.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {compactionCandidates.map(item => {
+                      const ageSec = Math.round(((Date.now() - (Date.parse(item.timestamp) || Date.now() - 300000)) / 1000) * decaySpeed);
+                      const displayAge = ageSec < 60 ? `${ageSec}s` : `${Math.round(ageSec / 60)}m`;
+                      
+                      return (
+                        <div key={item.id} className="p-2.5 bg-slate-950/80 border border-slate-850 rounded-xl flex items-center justify-between gap-3 text-[10px] animate-fadeIn hover:border-slate-800 transition">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="text-[8px] font-mono text-slate-400 bg-slate-900 px-1 py-0.2 rounded border border-slate-850">
+                                {item.id}
+                              </span>
+                              <span className="text-[8px] text-orange-400 font-bold">
+                                RELEVANCE: {item.relevanceScore}%
+                              </span>
+                            </div>
+                            <h5 className="font-semibold text-slate-200 truncate">{item.summary}</h5>
+                            <span className="text-[8px] text-slate-500 block mt-0.5 uppercase">Horizon: {item.horizon} • Age: {displayAge}</span>
+                          </div>
+
+                          <button 
+                            type="button"
+                            onClick={() => runPackShard(item)}
+                            className="h-7 px-2.5 bg-purple-600 hover:bg-purple-500 text-slate-100 rounded-lg text-[9px] font-bold flex items-center gap-0.5 shadow transition font-mono flex-shrink-0 cursor-pointer"
+                          >
+                            COMPACT
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Mass Compactor Control */}
+              {compactionCandidates.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    compactionCandidates.forEach(c => runPackShard(c));
+                  }}
+                  className="w-full h-8.5 bg-slate-950 border border-slate-850 hover:border-slate-800 hover:bg-slate-900 text-purple-450 hover:text-purple-300 text-[10px] font-bold rounded-xl transition flex items-center justify-center gap-1.5 font-mono uppercase cursor-pointer"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Compound All {compactionCandidates.length} Decayed Shards
+                </button>
+              )}
             </div>
 
             <div className="pt-3 border-t border-slate-85 mt-3 text-[10px] text-slate-500 text-center font-mono uppercase">

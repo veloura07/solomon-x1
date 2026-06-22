@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent, useMemo } from "react";
 import { Message, MemoryItem, AuditLog, AgentSpec, TelemetryPoint } from "./types";
 import ThreeCanvas from "./components/ThreeCanvas";
 import MemoryCortex from "./components/MemoryCortex";
@@ -25,7 +25,10 @@ import {
   Volume2,
   Lock,
   GitBranch,
-  User
+  User,
+  Search,
+  Command,
+  RefreshCw
 } from "lucide-react";
 
 const INITIAL_AGENTS: AgentSpec[] = [
@@ -206,6 +209,27 @@ export default function App() {
 
   const [bloomThreshold, setBloomThreshold] = useState<number>(0.22);
   const [bloomIntensity, setBloomIntensity] = useState<number>(1.5);
+
+  // Biometric & Telemetry Pulse States
+  const [biometricPulseActive, setBiometricPulseActive] = useState(false);
+  const [biometricHeartRate, setBiometricHeartRate] = useState(74);
+
+  // Quick Command Modal States
+  const [isCommandModalOpen, setIsCommandModalOpen] = useState(false);
+  const [commandSearchQuery, setCommandSearchQuery] = useState("");
+  const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
+
+  // High-Fidelity Toast Notification States
+  const [activeToast, setActiveToast] = useState<{ title: string; message: string; type: 'success' | 'warning' | 'info' } | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToastNotification = (title: string, message: string, type: 'success' | 'warning' | 'info') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setActiveToast({ title, message, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setActiveToast(null);
+    }, 4500);
+  };
   
   // 1. Chat States
   const [messages, setMessages] = useState<Message[]>([
@@ -295,6 +319,28 @@ export default function App() {
   const activeAgent = selectedRingIndex !== -1 ? agents[selectedRingIndex] : null;
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Dynamically adjust root CSS variables when the active agent shifts
+  useEffect(() => {
+    // Helper to format 0xRRGGBB as a 6-character hex color string
+    const hexColorStr = (colorNum: number) => `#${colorNum.toString(16).padStart(6, "0")}`;
+    
+    if (activeAgent) {
+      const primaryHex = hexColorStr(activeAgent.bandColor);
+      const accentHex = hexColorStr(activeAgent.accentColor);
+      
+      document.documentElement.style.setProperty("--agent-primary", primaryHex);
+      document.documentElement.style.setProperty("--agent-accent", accentHex);
+      document.documentElement.style.setProperty("--agent-accent-glow", `${accentHex}2a`); // ~16% opacity
+      document.documentElement.style.setProperty("--agent-accent-muted", `${accentHex}0e`); // ~5% opacity
+    } else {
+      // Default to unified senate assembly colors (deep royal violet/amethyst)
+      document.documentElement.style.setProperty("--agent-primary", "#450a0a");
+      document.documentElement.style.setProperty("--agent-accent", "#ec4899");
+      document.documentElement.style.setProperty("--agent-accent-glow", "#ec48992a");
+      document.documentElement.style.setProperty("--agent-accent-muted", "#ec48990e");
+    }
+  }, [activeAgent]);
+
   // Auto-scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -330,6 +376,265 @@ export default function App() {
     };
     setAuditLogs([addedLog, ...auditLogs]);
   };
+
+  // Trigger biometric telemetry spikes
+  const triggerBiometricTelemetrySpike = () => {
+    setBiometricPulseActive(true);
+    const mockArousalRate = Math.floor(Math.random() * 21) + 106; // e.g., 106 to 126 BPM
+    setBiometricHeartRate(mockArousalRate);
+
+    handleAddAuditLog({
+      actor: "Cognitive Twin",
+      action: "TELEMETRY_SPIKE_DETECTED",
+      status: "AUTHORIZED",
+      details: `Dispatched biometric arousal sensor frames. Heart rate spiked to ${mockArousalRate} BPM. Synced neural parity.`
+    });
+
+    handleAddMemory({
+      horizon: "L1_Sensory",
+      summary: `Cognitive Twin telemetry peak at ${mockArousalRate} BPM.`,
+      detailedContent: `Detected systemic arousal wave sequence. Local telemetry packets adjusted to ensure hardware-level synchronization.`,
+      category: "Telemetry",
+      tags: ["biometric", "parity", "senso_net"]
+    });
+
+    setTimeout(() => {
+      setBiometricPulseActive(false);
+      setBiometricHeartRate(Math.floor(Math.random() * 6) + 72); // baseline 72-77 BPM
+    }, 4000);
+  };
+
+  // Periodic random arousal simulation
+  useEffect(() => {
+    const minDelay = 16000;
+    const maxDelay = 26000;
+    let timerId: NodeJS.Timeout;
+
+    const runTelemetryTicker = () => {
+      const nextTime = Math.random() * (maxDelay - minDelay) + minDelay;
+      timerId = setTimeout(() => {
+        triggerBiometricTelemetrySpike();
+        runTelemetryTicker();
+      }, nextTime);
+    };
+
+    runTelemetryTicker();
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  }, []);
+
+  // Quick Command Options Database
+  const commandOptions = useMemo(() => [
+    {
+      label: "Switch to Cognitive Twin Overview",
+      category: "Navigation",
+      description: "Launch direct holographic view of the active agent twin stream",
+      action: () => setActiveTab('presence')
+    },
+    {
+      label: "Switch to Senate & Resource Economy",
+      category: "Navigation",
+      description: "Open the ring token metrics, transfers and historical charts panel",
+      action: () => setActiveTab('economy')
+    },
+    {
+      label: "Switch to Sovereignty Command Console",
+      category: "Navigation",
+      description: "Execute raw firmware instructions, terminal prompts and overrides",
+      action: () => setActiveTab('directives')
+    },
+    {
+      label: "Switch to Layer 0 Firewall Matrix",
+      category: "Navigation",
+      description: "Access epistemic disbelief index, rule matrices, and validation feeds",
+      action: () => setActiveTab('firewall')
+    },
+    {
+      label: "Switch to Memory & Dreams Cerebrum",
+      category: "Navigation",
+      description: "Observe temporal decay drift, sensory horizons and vector compaction",
+      action: () => setActiveTab('memory')
+    },
+    {
+      label: "Switch to Evolution Lab Platform",
+      category: "Navigation",
+      description: "View decentralized gene-mutations and cross-agent code generation",
+      action: () => setActiveTab('evolution')
+    },
+    {
+      label: "Switch to TrustOS Sovereign Log",
+      category: "Navigation",
+      description: "Audit raw cryptographic history, hash trails and parity verifications",
+      action: () => setActiveTab('trust')
+    },
+    {
+      label: "Switch to Laptop Parity Workspace",
+      category: "Navigation",
+      description: "Sync client parameters and inspect edge host execution contexts",
+      action: () => setActiveTab('twin')
+    },
+    {
+      label: "Force Cognitive Twin Telemetry Spike",
+      category: "Biometrics",
+      description: "Artificially stimulate the biometric pulse to trigger live system arousal",
+      action: () => triggerBiometricTelemetrySpike()
+    },
+    {
+      label: "Hardened Constitutional Shield",
+      category: "Security",
+      description: "Activate Layer 0 firewall containment protocols and block risky ports",
+      action: () => {
+        setActiveTab('firewall');
+        handleAddAuditLog({
+          actor: "Quick Console",
+          action: "HARDEN_CONSTITUTION_SHIELD",
+          status: "AUTHORIZED",
+          details: "Engaged full defensive shield buffer. Automated system blocklist updated."
+        });
+        showToastNotification("COGNITIVE SHIELD HARDENED", "Activated Layer 0 firewall containment protocols successfully.", "success");
+      }
+    },
+    {
+      label: "Inject Test Security Threat Load",
+      category: "Security",
+      description: "Inject mock non-parity network intrusion packets to test active gates",
+      action: () => {
+        setActiveTab('firewall');
+        handleAddAuditLog({
+          actor: "Sovereign Threat Assessor",
+          action: "INITIATE_INTRUSION_LOAD",
+          status: "GATED_PENDING",
+          details: "Dispatched simulated exploit payload. Monitoring firewall responses on port 443..."
+        });
+        showToastNotification("SECURITY THREAT SIMULATION INJECTED", "Monitoring active containment response on firewall violations feed.", "warning");
+      }
+    },
+    {
+      label: "Unseal TPM Cryptographic Registers",
+      category: "Sovereignty",
+      description: "Unseal firmware security chips to execute high-parity master directives",
+      action: () => {
+        handleAddAuditLog({
+          actor: "Hardware Sentinel",
+          action: "UNSEAL_TPM_REGISTERS",
+          status: "AUTHORIZED",
+          details: "Firmware registers unsealed. Sovereign cryptographic signature generated."
+        });
+        showToastNotification("TPM SECURE REGISTERS UNSEALED", "Sovereign signature validated. Execution of raw microcode enabled.", "info");
+      }
+    },
+    {
+      label: "Sync Memory Shards & Core Compactor",
+      category: "Memory",
+      description: "Audit sensory storage layers and compact low-relevance memory units",
+      action: () => {
+        setActiveTab('memory');
+        handleAddAuditLog({
+          actor: "Epistemic Core",
+          action: "TRIGGER_BATCH_COMPACTION",
+          status: "AUTHORIZED",
+          details: "Cleaned low-relevance L1-L3 sensory memories. Reclaimed ~2.4kb of state."
+        });
+        showToastNotification("BATCH COMPACTION COMPLETE", "Reclaimed virtual client VRAM and balanced system overall entropy.", "success");
+      }
+    },
+    {
+      label: "Sync WebSocket Cognitive Link",
+      category: "Network",
+      description: "Disregard retry timers and force direct socket link recovery on port 8765",
+      action: () => {
+        handleManualReconnect();
+        showToastNotification("WEBSOCKET RECOVERY FORCED", "Bypassed exponential backup delays. Pinging loopback pool...", "info");
+      }
+    },
+    ...agents.map(ag => ({
+      label: `Align Connection to: ${ag.name}`,
+      category: "Agent Alignment",
+      description: `Immediately swap active microinstructions and focus on ${ag.name} (${ag.roleDescription.substring(0, 48)}...)`,
+      action: () => {
+        handleSelectRing(ag.index);
+        showToastNotification(`ALIGNED WITH ${ag.name.toUpperCase()}`, `Neural focus successfully shifted to L1 enclave ${ag.name}.`, "success");
+      }
+    }))
+  ], [agents, activeAgent, selectedRingIndex]);
+
+  // Fuzzy search filtered command options
+  const filteredOptions = useMemo(() => {
+    if (!commandSearchQuery) return commandOptions;
+    const query = commandSearchQuery.toLowerCase();
+    return commandOptions.filter(opt => 
+      opt.label.toLowerCase().includes(query) || 
+      opt.category.toLowerCase().includes(query) || 
+      opt.description.toLowerCase().includes(query)
+    );
+  }, [commandOptions, commandSearchQuery]);
+
+  const filteredOptionsRef = useRef<any[]>([]);
+  const commandSelectedIndexRef = useRef<number>(0);
+
+  // Sync refs to avoid closures inside Keyboard effects
+  useEffect(() => {
+    filteredOptionsRef.current = filteredOptions;
+    commandSelectedIndexRef.current = commandSelectedIndex;
+  }, [filteredOptions, commandSelectedIndex]);
+
+  // Command-K keyboard listeners
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandModalOpen(prev => {
+          if (!prev) {
+            setCommandSearchQuery("");
+            setCommandSelectedIndex(0);
+          }
+          return !prev;
+        });
+        return;
+      }
+
+      if (isCommandModalOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setIsCommandModalOpen(false);
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const len = filteredOptionsRef.current.length;
+          if (len > 0) {
+            setCommandSelectedIndex(prev => (prev + 1) % len);
+          }
+          return;
+        }
+
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const len = filteredOptionsRef.current.length;
+          if (len > 0) {
+            setCommandSelectedIndex(prev => (prev - 1 + len) % len);
+          }
+          return;
+        }
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const activeIndex = commandSelectedIndexRef.current;
+          const currentFiltered = filteredOptionsRef.current;
+          if (currentFiltered && currentFiltered[activeIndex]) {
+            currentFiltered[activeIndex].action();
+            setIsCommandModalOpen(false);
+          }
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCommandModalOpen]);
 
   // 5. WebSocket Client with Exponential Backoff & State Monitoring
   const [wsConnected, setWsConnected] = useState(false);
@@ -735,6 +1040,29 @@ export default function App() {
               {activeAgent ? activeAgent.tokenPool : agents.reduce((sum, a) => sum + a.tokenPool, 0)}
             </span> {activeAgent ? "STAKED" : "RESERVE"}</span>
           </div>
+          
+          {/* Biometric Pulse Indicator */}
+          <div 
+            onClick={triggerBiometricTelemetrySpike}
+            className={`flex items-center gap-2 px-3 h-8 rounded-full border transition-all duration-500 cursor-pointer ${
+              biometricPulseActive 
+                ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)] animate-pulse" 
+                : "bg-slate-900/60 border-slate-800/80 text-slate-400 hover:border-slate-700/80 hover:text-slate-200"
+            }`}
+            title="Biometric Cognitive Twin Pulse. Click to manually capture/simulate arousal telemetry spike."
+          >
+            <div className="relative flex items-center justify-center w-2 h-2">
+              <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 ${biometricPulseActive ? 'animate-ping' : 'opacity-0'}`} />
+              <span className={`relative inline-flex rounded-full h-2 w-2 transition-all duration-300 ${biometricPulseActive ? 'bg-emerald-400 shadow-[0_0_6px_#10b981]' : 'bg-slate-500'}`} />
+            </div>
+            <span className="text-[9px] font-bold tracking-widest uppercase font-mono shrink-0">
+              {biometricPulseActive ? "BIOMETRIC SPIKE" : "TWIN PULSE: STABLE"}
+            </span>
+            <span className={`text-[8px] font-mono shrink-0 font-semibold transition-colors duration-300 ${biometricPulseActive ? 'text-emerald-450 font-bold' : 'text-slate-500'}`}>
+              {biometricHeartRate} BPM
+            </span>
+          </div>
+
           <div className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full text-purple-300">
             <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
             <span>REP: {
@@ -1254,6 +1582,121 @@ export default function App() {
           isCinematicFading ? "opacity-100" : "opacity-0"
         }`}
       />
+
+      {/* Quick Command fuzzy-search Panel overlay */}
+      {isCommandModalOpen && (
+        <div 
+          onClick={() => setIsCommandModalOpen(false)}
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[99998] flex items-start justify-center pt-[15vh] p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-slate-900/95 border border-slate-800/80 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden max-h-[50vh] transition-all animate-fadeIn"
+          >
+            {/* Search inputs */}
+            <div className="flex items-center gap-3 px-4 h-12 border-b border-slate-800/50">
+              <Search className="w-4 h-4 text-purple-400" />
+              <input
+                type="text"
+                placeholder="Type a directive, agent, or viewport tab..."
+                value={commandSearchQuery}
+                onChange={(e) => {
+                  setCommandSearchQuery(e.target.value);
+                  setCommandSelectedIndex(0);
+                }}
+                className="flex-1 bg-transparent border-none outline-none font-sans text-xs text-slate-200 placeholder-slate-500"
+                autoFocus
+              />
+              <div className="flex items-center gap-1">
+                <span className="px-1.5 py-0.5 rounded bg-slate-850 border border-slate-800 text-[8px] text-slate-400 font-mono">ESC</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-850 border border-slate-800 text-[8px] text-slate-400 font-mono">↵</span>
+              </div>
+            </div>
+
+            {/* Scrollable selections */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((opt, idx) => {
+                  const isSelected = idx === commandSelectedIndex;
+                  return (
+                    <button
+                      key={opt.label}
+                      onClick={() => {
+                        opt.action();
+                        setIsCommandModalOpen(false);
+                      }}
+                      className={`w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center justify-between gap-4 border cursor-pointer ${
+                        isSelected
+                          ? "bg-purple-950/20 border-purple-500/35 text-purple-200 shadow-[inset_0_1px_2px_rgba(168,85,247,0.05)]"
+                          : "bg-transparent border-transparent text-slate-450 hover:bg-slate-950/40 hover:text-slate-350"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-semibold block">{opt.label}</span>
+                        <span className="text-[10px] text-slate-400 line-clamp-1 block mt-0.5 font-mono">{opt.description}</span>
+                      </div>
+                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full font-mono shrink-0 uppercase tracking-wider ${
+                        isSelected
+                          ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                          : "bg-slate-950 text-slate-500 border border-slate-850"
+                      }`}>
+                        {opt.category}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center text-slate-500 space-y-1">
+                  <Terminal className="w-8 h-8 text-slate-700 mx-auto mb-2 animate-pulse" />
+                  <p className="text-xs font-semibold text-slate-400">No system instructions matched "{commandSearchQuery}"</p>
+                  <p className="text-[10px] text-slate-550">Refine query parities to unseal firmware commands.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-2 border-t border-slate-800/50 bg-slate-950/40 flex justify-between items-center text-[8px] font-mono text-slate-500 uppercase tracking-widest leading-none">
+              <span>Command Console v10.4.2</span>
+              <div className="flex gap-2">
+                <span>Navigate <span className="text-slate-400 font-bold">↑↓</span></span>
+                <span>Select <span className="text-slate-400 font-bold">↵</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* High-Fidelity Floating Toast Alert */}
+      {activeToast && (
+        <div className="fixed bottom-6 right-6 z-[99999] w-80 p-4 rounded-3xl bg-slate-950/90 border border-slate-800/80 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.8)] backdrop-blur-md animate-fadeIn flex gap-3 transition-all duration-300">
+          <div className={`p-2 rounded-xl shrink-0 flex items-center justify-center h-8 w-8 border ${
+            activeToast.type === 'success' 
+              ? "bg-emerald-950/50 border-emerald-500/30 text-emerald-400" 
+              : activeToast.type === 'warning' 
+                ? "bg-orange-950/50 border-orange-500/30 text-orange-400" 
+                : "bg-purple-950/50 border-purple-500/30 text-purple-300"
+          }`}>
+            {activeToast.type === 'success' ? (
+              <ShieldCheck className="w-4 h-4" />
+            ) : activeToast.type === 'warning' ? (
+              <ShieldAlert className="w-4 h-4 animate-pulse" />
+            ) : (
+              <Terminal className="w-4 h-4" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-bold tracking-wide block font-sans text-slate-150">{activeToast.title}</span>
+            <p className="text-[10px] text-slate-400 leading-normal mt-1 font-mono">{activeToast.message}</p>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setActiveToast(null)}
+            className="text-slate-500 hover:text-slate-100 text-xs self-start p-1 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

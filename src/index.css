@@ -4,6 +4,10 @@
 @theme {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-agent-primary: var(--agent-primary);
+  --color-agent-accent: var(--agent-accent);
+  --color-agent-accent-glow: var(--agent-accent-glow);
+  --color-agent-accent-muted: var(--agent-accent-muted);
 }
 
 @keyframes fadeIn {
