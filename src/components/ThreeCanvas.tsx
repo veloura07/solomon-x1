@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -686,7 +686,7 @@ interface ThreeCanvasProps {
   telemetryData?: TelemetryPoint[];
 }
 
-export default function ThreeCanvas({ 
+export default memo(function ThreeCanvas({
   selectedRingIndex, 
   onSelectRing, 
   agents,
@@ -1882,7 +1882,7 @@ export default function ThreeCanvas({
         
         if (Math.random() < emitProb) {
           const rColor = new THREE.Color(pr.color);
-          const activeAgent = agents.find((ag) => ag.index === pr.index);
+          const activeAgent = agentsRef.current.find((ag) => ag.index === pr.index);
           const accentColor = activeAgent ? new THREE.Color(activeAgent.accentColor) : rColor;
           const blendedColor = rColor.clone().lerp(accentColor, 0.45);
 
@@ -2548,4 +2548,4 @@ export default function ThreeCanvas({
       })()}
     </div>
   );
-}
+});

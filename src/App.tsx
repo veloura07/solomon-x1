@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent, useCallback } from "react";
 import { Message, MemoryItem, AuditLog, AgentSpec, TelemetryPoint } from "./types";
 import ThreeCanvas from "./components/ThreeCanvas";
 import MemoryCortex from "./components/MemoryCortex";
@@ -171,13 +171,24 @@ const INITIAL_AGENTS: AgentSpec[] = [
   }
 ];
 
+
+  // Generate simple random hash
+  const generateHash = () => {
+    const chars = "abcdef0123456789";
+    let hash = "";
+    for (let i = 0; i < 64; i++) {
+      hash += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return hash;
+  };
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin'>('presence');
   const [selectedRingIndex, setSelectedRingIndex] = useState(9); // Ars Regalis active by default
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
   
-  const handleSelectRing = (idx: number) => {
+  const handleSelectRing = useCallback((idx: number) => {
     if (idx === selectedRingIndex) return;
     setIsCinematicFading(true);
     setTimeout(() => {
@@ -202,7 +213,7 @@ export default function App() {
         setIsCinematicFading(false);
       }, 250);
     }, 250);
-  };
+  }, [selectedRingIndex]);
 
   const [bloomThreshold, setBloomThreshold] = useState<number>(0.22);
   const [bloomIntensity, setBloomIntensity] = useState<number>(1.5);
@@ -300,36 +311,31 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sendingChat]);
 
-  // Generate simple random hash
-  const generateHash = () => {
-    const chars = "abcdef0123456789";
-    let hash = "";
-    for (let i = 0; i < 64; i++) {
-      hash += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return hash;
-  };
 
   // Add memory handler
-  const handleAddMemory = (newItem: Omit<MemoryItem, "id" | "timestamp">) => {
-    const addedItem: MemoryItem = {
-      ...newItem,
-      id: "mem_" + (memoryItems.length + 1),
-      timestamp: new Date().toISOString()
-    };
-    setMemoryItems([addedItem, ...memoryItems]);
-  };
+  const handleAddMemory = useCallback((newItem: Omit<MemoryItem, "id" | "timestamp">) => {
+    setMemoryItems(prev => {
+      const addedItem: MemoryItem = {
+        ...newItem,
+        id: "mem_" + (prev.length + 1),
+        timestamp: new Date().toISOString()
+      };
+      return [addedItem, ...prev];
+    });
+  }, []);
 
   // Add audit log handler
-  const handleAddAuditLog = (newLog: Omit<AuditLog, "id" | "timestamp" | "cryptographicHash">) => {
-    const addedLog: AuditLog = {
-      ...newLog,
-      id: "audit_" + (auditLogs.length + 1),
-      timestamp: new Date().toISOString(),
-      cryptographicHash: generateHash()
-    };
-    setAuditLogs([addedLog, ...auditLogs]);
-  };
+  const handleAddAuditLog = useCallback((newLog: Omit<AuditLog, "id" | "timestamp" | "cryptographicHash">) => {
+    setAuditLogs(prev => {
+      const addedLog: AuditLog = {
+        ...newLog,
+        id: "audit_" + (prev.length + 1),
+        timestamp: new Date().toISOString(),
+        cryptographicHash: generateHash()
+      };
+      return [addedLog, ...prev];
+    });
+  }, []);
 
   // 5. WebSocket Client with Exponential Backoff & State Monitoring
   const [wsConnected, setWsConnected] = useState(false);
