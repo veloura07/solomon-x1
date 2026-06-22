@@ -13,7 +13,8 @@ const LineVertShader = `
   varying float vProgress;
   void main() {
     vProgress = progress;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // Optimized: Parenthesized matrix multiplication to calculate gl_Position with zero matrix-matrix overhead
+    gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0));
   }
 `;
 
@@ -344,12 +345,14 @@ const MotionBlurShader = {
 };
 
 // Screen Space Ambient Occlusion (SSAO) shader definition for soft, realistic contact shadows
+// Screen Space Ambient Occlusion (SSAO) shader definition for soft, realistic contact shadows using depth and luma crevices
 const SSAOShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
+    tDepth: { value: null as THREE.Texture | null },
     uResolution: { value: new THREE.Vector2(1, 1) },
-    uAOStrength: { value: 1.5 },
-    uAORadius: { value: 4.5 },
+    uAOStrength: { value: 1.8 },
+    uAORadius: { value: 4.8 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -360,6 +363,7 @@ const SSAOShader = {
   `,
   fragmentShader: `
     uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
     uniform vec2 uResolution;
     uniform float uAOStrength;
     uniform float uAORadius;
@@ -369,57 +373,84 @@ const SSAOShader = {
       return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
     }
 
+    float getLinearDepth(vec2 uv) {
+      float d = texture2D(tDepth, uv).r;
+      float near = 0.1;
+      float far = 2000.0;
+      return (2.0 * near * far) / (far + near - d * (far - near));
+    }
+
     void main() {
       vec4 sceneCol = texture2D(tDiffuse, vUv);
+      float currentDepth = getLinearDepth(vUv);
       float currentLuma = dot(sceneCol.rgb, vec3(0.299, 0.587, 0.114));
+      
+      // If we are looking at far background sky parameters, don't perform heavy AO
+      if (currentDepth > 1900.0) {
+        gl_FragColor = sceneCol;
+        return;
+      }
       
       float ao = 0.0;
       float totalWeight = 0.0;
       const int SAMPLE_COUNT = 16;
       
-      float stepSize = uAORadius / max(uResolution.x, uResolution.y);
+      // Radius scaled slightly based on perspective depth for consistent physical grounding
+      float perspectiveRadius = uAORadius * (1.0 / (0.01 + currentDepth * 0.0035));
+      float stepSize = perspectiveRadius / max(uResolution.x, uResolution.y);
       
       for (int i = 0; i < SAMPLE_COUNT; i++) {
         float angle = (float(i) / float(SAMPLE_COUNT)) * 6.2831853;
-        float noiseFactor = 0.4 + 0.6 * rand(vUv * 123.456 + float(i));
+        float noiseFactor = 0.45 + 0.55 * rand(vUv * 123.456 + float(i));
         vec2 offset = vec2(cos(angle), sin(angle)) * stepSize * noiseFactor;
         
-        vec4 sampleCol = texture2D(tDiffuse, vUv + offset);
+        vec2 sampleUv = vUv + offset;
+        float sampleDepth = getLinearDepth(sampleUv);
+        vec4 sampleCol = texture2D(tDiffuse, sampleUv);
         float sampleLuma = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
         
-        // If neighbor is brighter than center, center is in a contact/shadow crevice
-        float diff = max(0.0, sampleLuma - currentLuma);
+        // 1. Depth-based proximity occlusion
+        float depthDiff = currentDepth - sampleDepth;
         
-        // Soft falloff based on sample distance
-        float distFactor = 1.0 - (float(i) / float(SAMPLE_COUNT));
-        float weight = distFactor * distFactor;
+        // 2. Luma-based color-space crevice occlusion
+        float lumaDiff = max(0.0, sampleLuma - currentLuma);
         
-        ao += diff * weight;
-        totalWeight += weight;
+        // Occlude if sample point is physically in front of or inside a crevice
+        if (depthDiff > 0.01 && depthDiff < 12.0) {
+          float rangeNull = 1.0 - smoothstep(6.0, 12.0, depthDiff);
+          float weight = (1.0 - (float(i) / float(SAMPLE_COUNT))) * rangeNull;
+          ao += (depthDiff * 0.15 + lumaDiff * 0.5) * weight;
+          totalWeight += weight;
+        } else {
+          float weight = (1.0 - (float(i) / float(SAMPLE_COUNT))) * 0.2;
+          ao += lumaDiff * 0.3 * weight;
+          totalWeight += weight;
+        }
       }
       
-      // Normalize and apply strength
       ao = (ao / max(totalWeight, 0.001)) * uAOStrength;
       
-      // Prevent shadowing pure black cosmic space and preserve bright self-emissive highlights
-      float highlightMask = 1.0 - smoothstep(0.65, 0.95, currentLuma);
-      float emptySpaceMask = smoothstep(0.03, 0.15, currentLuma);
-      float shadowFactor = clamp(1.0 - ao * highlightMask * emptySpaceMask, 0.38, 1.0);
+      // Keep highlights and glowing cores bright (prevent shadowing self-illuminating objects)
+      float highlightMask = 1.0 - smoothstep(0.55, 0.90, currentLuma);
+      float emptySpaceMask = smoothstep(0.02, 0.12, currentLuma);
+      
+      float shadowFactor = clamp(1.0 - ao * highlightMask * emptySpaceMask, 0.32, 1.0);
       
       gl_FragColor = vec4(sceneCol.rgb * shadowFactor, sceneCol.a);
     }
   `
 };
 
-// Cinematic Depth of Field (DoF) post-processing shader with high-fidelity spiral Bokeh distribution
+// Cinematic Depth of Field (DoF) post-processing shader with depth-texture based focal plane selection and gorgeous spiral Bokeh distribution
 const CinematicDoFShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
+    tDepth: { value: null as THREE.Texture | null },
     uResolution: { value: new THREE.Vector2(1, 1) },
-    uFocusPoint: { value: new THREE.Vector2(0.5, 0.5) },
-    uFocusRange: { value: 0.38 },
+    uFocalDepth: { value: 160.0 }, // Dynamic linear focus depth from the camera
+    uAperture: { value: 8.5 },      // Width of the focal plane tolerance zone
     uMaxBlur: { value: 5.5 },
-    uEnabled: { value: 0.0 }, // Smoothly transitions from 0.0 to 1.0 when an agent is selected
+    uEnabled: { value: 0.0 },      // Smoothly transitions from 0.0 to 1.0 when an agent is selected
   },
   vertexShader: `
     varying vec2 vUv;
@@ -430,14 +461,22 @@ const CinematicDoFShader = {
   `,
   fragmentShader: `
     uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
     uniform vec2 uResolution;
-    uniform vec2 uFocusPoint;
-    uniform float uFocusRange;
+    uniform float uFocalDepth;
+    uniform float uAperture;
     uniform float uMaxBlur;
     uniform float uEnabled;
     varying vec2 vUv;
 
     const float GOLDEN_ANGLE = 2.39996323;
+
+    float getLinearDepth(vec2 uv) {
+      float d = texture2D(tDepth, uv).r;
+      float near = 0.1;
+      float far = 2000.0;
+      return (2.0 * near * far) / (far + near - d * (far - near));
+    }
 
     vec4 bokehBlur(sampler2D tex, vec2 uv, float radius) {
       vec4 accum = vec4(0.0);
@@ -466,8 +505,17 @@ const CinematicDoFShader = {
         return;
       }
 
-      float dist = distance(vUv, uFocusPoint);
-      float blurFactor = smoothstep(0.04, uFocusRange, dist) * uMaxBlur * uEnabled;
+      // Linearize depth from the 16-bit hardware depth buffer texture
+      float currentDepth = getLinearDepth(vUv);
+      
+      // Keep background or empty skybox values within visual rendering bounds
+      if (currentDepth > 1900.0) {
+        currentDepth = 1900.0;
+      }
+
+      // Cinematic OLED depth: analyze physical focal offset
+      float depthDiff = abs(currentDepth - uFocalDepth);
+      float blurFactor = smoothstep(1.5, 55.0, depthDiff) * uMaxBlur * uEnabled;
       
       if (blurFactor < 0.1) {
         gl_FragColor = baseColor;
@@ -690,6 +738,47 @@ function createMetallicRoughnessTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+const ringGlowVertShader = `
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewPosition = -mvPosition.xyz;
+    vNormal = normalMatrix * normal;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const ringGlowFragShader = `
+  uniform vec3 uColor;
+  uniform float uGlowIntensity;
+  uniform float uHoverIntensity;
+  uniform float uTime;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec2 vUv;
+  void main() {
+    vec3 N = normalize(vNormal);
+    vec3 V = normalize(vViewPosition);
+    
+    // Smooth atmospheric contour glow (Fresnel view-angle falloff)
+    float dotProduct = max(dot(N, V), 0.0);
+    float glow = pow(1.0 - dotProduct, 3.5); // high contrast grazing edge
+    
+    // Subtle pulsating flow around the ring torus
+    float stream = sin(vUv.x * 12.0 - uTime * 3.5) * cos(vUv.y * 4.0 + uTime * 2.0) * 0.15 + 0.85;
+    
+    // Compose dynamic volumetric pulse
+    float pulse = 0.9 + 0.1 * sin(uTime * 4.5);
+    
+    vec3 finalColor = uColor * uGlowIntensity * pulse * stream * glow * (1.0 + uHoverIntensity * 0.85);
+    
+    gl_FragColor = vec4(finalColor, glow * 0.55 * pulse * (1.0 + uHoverIntensity * 0.45));
+  }
+`;
+
 const ringVertShader = `
   uniform float uTime;
   uniform float uReputationScore;
@@ -734,6 +823,7 @@ const ringFragShader = `
   uniform vec3 uAccentColor;
   uniform sampler2D uMatCap;
   uniform sampler2D uMetallicRoughness;
+  uniform float uBloomGlowFactor;
 
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -830,7 +920,8 @@ const ringFragShader = `
     vec3 envReflection = (vec3(0.08, 0.05, 0.22) * waveX + vec3(0.18, 0.26, 0.75) * waveY + uAccentColor * waveZ) * 1.3;
     
     // Upgrade: Real metallic Fresnel reflection (Schlick's approximation) with extreme chromatic light refraction
-    float cosTheta = max(0.0, dot(perturbedNormal, V));
+    // Utilizing the direct dot product of geometric surface normal (N) and view direction (V) for metallic light refraction
+    float cosTheta = max(0.0, dot(N, V));
     float grazeShift = 0.08 * (1.0 - cosTheta); // Metallic grazing refraction dispersion
     
     // Spectral-shifted F0 base reflectance vectors representing high-fidelity golden-silver metallurgy
@@ -865,7 +956,7 @@ const ringFragShader = `
     
     // Emissive glowing patterns (e.g. glowing digital circuit or gold runic engravings)
     float activePulse = uPulseIntensity * (0.9 + 0.2 * sin(uTime * 3.5));
-    float finalEmissiveIntensity = uEmissiveIntensity * activePulse * mix(1.1 + 1.3 * uHoverIntensity, 0.15, uDoFBlur);
+    float finalEmissiveIntensity = uEmissiveIntensity * activePulse * uBloomGlowFactor * mix(1.1 + 1.3 * uHoverIntensity, 0.15, uDoFBlur);
     
     // Procedural runic engraving inlay glow with screen-space hardware anti-aliasing to eliminate pixelation
     float runeNoise1 = sin(vUv.x * 48.0) * cos(vUv.y * 8.0 + uTime * 0.5);
@@ -1154,7 +1245,8 @@ export default function ThreeCanvas({
       magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat,
       type: THREE.HalfFloatType, // Pristine 16-bit color depth to eliminate banding in bloom/nebulas
-      samples: 8 // Hardware MSAA for WebGL2 post-processing! Extreme high-quality anti-aliasing!
+      samples: 8, // Hardware MSAA for WebGL2 post-processing! Extreme high-quality anti-aliasing!
+      depthTexture: new THREE.DepthTexture(container.clientWidth, container.clientHeight)
     });
     const composer = new EffectComposer(renderer, composeTarget);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 4.0));
@@ -1174,11 +1266,13 @@ export default function ThreeCanvas({
 
     // Screen Space Ambient Occlusion ShaderPass to render detailed contact soft shadows
     const ssaoPass = new ShaderPass(SSAOShader);
+    ssaoPass.uniforms.tDepth = { value: composeTarget.depthTexture };
     ssaoPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
     composer.addPass(ssaoPass);
 
     // Cinematic Depth of Field (DoF) post-processing pass
     const dofPass = new ShaderPass(CinematicDoFShader);
+    dofPass.uniforms.tDepth = { value: composeTarget.depthTexture };
     dofPass.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
     composer.addPass(dofPass);
 
@@ -1284,6 +1378,7 @@ export default function ThreeCanvas({
       radialOffset: number;
       speed: number;
       ringIndex: number;
+      ringRef?: any;
       zWobbleFreq: number;
     }
     const activeTrails: TrailParticle[] = [];
@@ -1326,13 +1421,16 @@ export default function ThreeCanvas({
     // 6A. Core Sphere
     const coreGeo = new THREE.SphereGeometry(6, 256, 256); // Pristine high subdivision density
     const coreMat = new THREE.MeshPhysicalMaterial({
-      color: 0xff9900,
-      emissive: 0xff9900,
-      emissiveIntensity: 1.8,
-      roughness: 0.1,
-      metalness: 0.92,
-      clearcoat: 1.0,          // Highly glossy outer coat
-      clearcoatRoughness: 0.02,
+      color: 0xffaa00,
+      emissive: 0xff6600,
+      emissiveIntensity: 2.2,     // High-intensity core self-illumination
+      roughness: 0.02,
+      metalness: 0.12,
+      transmission: 0.62,         // Gorgeous translucent refraction bloom core!
+      ior: 1.58,                  // Crystal index of refraction
+      thickness: 3.5,             // Thickness for light refraction calculations
+      clearcoat: 1.0,            // Highly glossy outer lacquer coat
+      clearcoatRoughness: 0.01,
       normalMap: normalMapTexture,
       normalScale: new THREE.Vector2(0.2, 0.2),
       roughnessMap: metallicRoughnessTexture,
@@ -1379,6 +1477,16 @@ export default function ThreeCanvas({
     });
     const icoMesh = new THREE.Mesh(icoGeo, icoMat);
     sigilGroup.add(icoMesh);
+
+    const icoGeoInner = new THREE.IcosahedronGeometry(21, 2); // nested higher density sacred geometry cage
+    const icoMatInner = new THREE.MeshBasicMaterial({
+      color: 0xff9900,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.12,
+    });
+    const icoMeshInner = new THREE.Mesh(icoGeoInner, icoMatInner);
+    sigilGroup.add(icoMeshInner);
 
     // ─── PART 6D: THE HOLOGRAPHIC COGNITIVE AVATAR ───────────
     const avatarGroup = new THREE.Group();
@@ -1481,6 +1589,7 @@ export default function ThreeCanvas({
       torqueBlendFactor: number;
       dragDecayFactor: number;
       dataStreamLine?: THREE.Line;
+      glowMat?: THREE.ShaderMaterial;
     }[];
 
     agents.forEach((spec) => {
@@ -1508,7 +1617,7 @@ export default function ThreeCanvas({
         uniforms: {
           uColor: { value: new THREE.Color(spec.bandColor) },
           uEmissive: { value: new THREE.Color(spec.bandColor) },
-          uEmissiveIntensity: { value: 0.65 },
+          uEmissiveIntensity: { value: 5.2 },
           uNormalMap: { value: normalMapTexture },
           uNormalScale: { value: new THREE.Vector2(0.28, 0.28) },
           uMatCap: { value: matCapTexture },
@@ -1519,6 +1628,7 @@ export default function ThreeCanvas({
           uDoFBlur: { value: 0.0 },
           uAccentColor: { value: new THREE.Color(spec.accentColor) },
           uReputationScore: { value: spec.reputationScore },
+          uBloomGlowFactor: { value: 2.6 },
         },
         depthWrite: true,
         depthTest: true,
@@ -1528,12 +1638,20 @@ export default function ThreeCanvas({
 
       // Create an additive volumetric atmospheric glow mesh around the torus band (ethereal bloom simulator)
       const glowGeo = new THREE.TorusGeometry(8, 1.55, 128, 512);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: spec.bandColor,
+      const glowMat = new THREE.ShaderMaterial({
+        vertexShader: ringGlowVertShader,
+        fragmentShader: ringGlowFragShader,
+        uniforms: {
+          uColor: { value: new THREE.Color(spec.bandColor) },
+          uGlowIntensity: { value: 4.6 }, // Multiplied high-fidelity HDR glow intensity to guarantee gorgeous bloom bleeding
+          uHoverIntensity: { value: 0.0 },
+          uTime: { value: 0.0 }
+        },
         transparent: true,
-        opacity: 0.22,
         blending: THREE.AdditiveBlending,
-        side: THREE.BackSide
+        side: THREE.BackSide,
+        depthWrite: false,
+        depthTest: true
       });
       const glowMesh = new THREE.Mesh(glowGeo, glowMat);
       g.add(glowMesh);
@@ -1728,6 +1846,7 @@ export default function ThreeCanvas({
         torqueBlendFactor: 1.0,
         dragDecayFactor: 0.932,
         dataStreamLine,
+        glowMat,
       });
     });
 
@@ -2099,6 +2218,21 @@ export default function ThreeCanvas({
     let physicsAccumulator = 0;
     const FIXED_TIMESTEP = 0.016666; // Fixed timestep (60 Hz clock)
 
+    // Pre-allocated scratch/temporary variables for high-fidelity zero-allocation frame loops
+    const scratchLocalPos = new THREE.Vector3();
+    const scratchTargetPos = new THREE.Vector3();
+    const scratchFocusTargetPos = new THREE.Vector3();
+    const scratchProjectedPos = new THREE.Vector3();
+    const scratchHubPos = new THREE.Vector3(0, 0, 0);
+    const scratchHUDTempV3 = new THREE.Vector3();
+    const scratchCamSpacePos = new THREE.Vector3();
+    
+    const scratchColorActive = new THREE.Color();
+    const scratchColorRing = new THREE.Color();
+    const scratchColorAccent = new THREE.Color();
+    const scratchColorStone = new THREE.Color();
+    const scratchColorOrange = new THREE.Color();
+
     let currentDPRScale = Math.max(window.devicePixelRatio || 1.0, 3840.0 / Math.max(1.0, container.clientWidth));
     let targetDPRScale = currentDPRScale;
     let lastScalingTime = performance.now();
@@ -2184,6 +2318,7 @@ export default function ThreeCanvas({
       }
 
       const activeIdx = selectedIndexRef.current;
+      const isAgentActive = activeIdx !== -1;
 
       // ─── FIXED TIMESTEP ACCUMULATOR LOOP FOR PHYSIO-KINETIC CALCULATIONS ───
       physicsAccumulator += delta;
@@ -2313,11 +2448,15 @@ export default function ThreeCanvas({
       sparksPosAttr.needsUpdate = true;
 
       icoMesh.rotation.y = -time * 0.04;
+      if (icoMeshInner) {
+        icoMeshInner.rotation.y = time * 0.075;
+        icoMeshInner.rotation.x = time * 0.038;
+      }
       sigilGroup.rotation.z = time * 0.02;
 
-      // Pulse core glowing intensity
-      const pulseRatio = 1.0 + 0.3 * Math.sin(time * 2.5);
-      coreMat.emissiveIntensity = 1.5 * pulseRatio;
+      // Pulse core glowing intensity - calibrated dynamically based on agent active status to avoid washing out wireframes
+      const pulseRatio = 1.0 + 0.25 * Math.sin(time * 2.5);
+      coreMat.emissiveIntensity = (isAgentActive ? 0.95 : 1.35) * pulseRatio;
 
       // ─── DYNAMIC HOLOGRAPHIC COGNITIVE AVATAR ANIMATIONS ───
       // Gently rotate and bob the holographic head representation
@@ -2334,11 +2473,11 @@ export default function ThreeCanvas({
 
       // Get color matches for the unsealed active agent
       const activeColorHex = activeIdx !== -1 && agents[activeIdx] ? agents[activeIdx].bandColor : 0x7c4df3;
-      const activeColor = new THREE.Color(activeColorHex);
+      scratchColorActive.set(activeColorHex);
       
-      waveMat.uniforms.uColor.value.copy(activeColor);
-      avatarCloudMat.color.copy(activeColor);
-      scanRingMat.color.copy(activeColor);
+      waveMat.uniforms.uColor.value.copy(scratchColorActive);
+      avatarCloudMat.color.copy(scratchColorActive);
+      scanRingMat.color.copy(scratchColorActive);
 
       // Animate speaking vocal soundwave analyzer loop
       const wavePosAttr = waveGeo.attributes.position as THREE.BufferAttribute;
@@ -2428,7 +2567,6 @@ export default function ThreeCanvas({
         }
       }
 
-      const isAgentActive = activeIdx !== -1;
 
       // Hover-responsive parallax camera shift + Focus Zoom to selected ring
       const targetCamX = parallax.x * 12.0;
@@ -2445,10 +2583,14 @@ export default function ThreeCanvas({
         const emitProb = isSelected ? 0.95 : 0.4;
         
         if (Math.random() < emitProb) {
-          const rColor = new THREE.Color(pr.color);
+          scratchColorRing.set(pr.color);
           const activeAgent = agents.find((ag) => ag.index === pr.index);
-          const accentColor = activeAgent ? new THREE.Color(activeAgent.accentColor) : rColor;
-          const blendedColor = rColor.clone().lerp(accentColor, 0.45);
+          if (activeAgent) {
+            scratchColorAccent.set(activeAgent.accentColor);
+          } else {
+            scratchColorAccent.set(pr.color);
+          }
+          const blendedColor = scratchColorRing.clone().lerp(scratchColorAccent, 0.45);
 
           activeTrails.push({
             pos: new THREE.Vector3(),
@@ -2460,6 +2602,7 @@ export default function ThreeCanvas({
             radialOffset: (Math.random() - 0.5) * 0.6,
             speed: (0.8 + Math.random() * 1.2) * (isSelected ? 2.5 : 1.0),
             ringIndex: pr.index,
+            ringRef: pr,
             zWobbleFreq: 2.0 + Math.random() * 4.0,
           });
         }
@@ -2482,7 +2625,7 @@ export default function ThreeCanvas({
         }
 
         if (traceCount < MAX_TRAIL_PARTICLES) {
-          const pr = physicalRings.find((r) => r.index === pt.ringIndex);
+          const pr = pt.ringRef || physicalRings.find((r) => r.index === pt.ringIndex);
           if (pr) {
             // increment angle around the torus ring path
             pt.theta += pt.speed * delta;
@@ -2492,8 +2635,8 @@ export default function ThreeCanvas({
             const localY = Math.sin(pt.theta) * radius;
             const localZ = Math.sin(pt.theta * pt.zWobbleFreq + pt.age * 5.0) * 0.5;
 
-            const localPos = new THREE.Vector3(localX, localY, localZ);
-            pt.pos.copy(localPos).applyMatrix4(pr.group.matrixWorld);
+            scratchLocalPos.set(localX, localY, localZ);
+            pt.pos.copy(scratchLocalPos).applyMatrix4(pr.group.matrixWorld);
 
             const pct = pt.age / pt.maxAge;
             const alpha = 1.0 - pct;
@@ -2535,20 +2678,20 @@ export default function ThreeCanvas({
       if (hoveredRingIndex !== -1) {
         const hRing = physicalRings.find((pr) => pr.index === hoveredRingIndex);
         if (hRing) {
-          targetFocusPos = new THREE.Vector3();
+          targetFocusPos = scratchFocusTargetPos;
           hRing.group.getWorldPosition(targetFocusPos);
           focusRangeTarget = 0.32; // Tighter focus circle on hovered ring
         }
       } else if (isAgentActive) {
         const aRing = physicalRings.find((pr) => pr.index === activeIdx);
         if (aRing) {
-          targetFocusPos = new THREE.Vector3();
+          targetFocusPos = scratchFocusTargetPos;
           aRing.group.getWorldPosition(targetFocusPos);
           focusRangeTarget = 0.28; // Very sharp focus on the selected active agent
         }
       } else {
         // Focusing on the central core or when hovering the core
-        targetFocusPos = new THREE.Vector3(0, 0, 0);
+        targetFocusPos = scratchFocusTargetPos.set(0, 0, 0);
         focusRangeTarget = isCoreHovered ? 0.20 : 0.26; // Blurs background rings even more when hover-focusing core
       }
 
@@ -2556,10 +2699,10 @@ export default function ThreeCanvas({
       let focusTargetY = 0.5;
 
       if (targetFocusPos) {
-        const tempV = targetFocusPos.clone();
-        tempV.project(camera);
-        focusTargetX = (tempV.x * 0.5) + 0.5;
-        focusTargetY = (tempV.y * 0.5) + 0.5;
+        scratchProjectedPos.copy(targetFocusPos);
+        scratchProjectedPos.project(camera);
+        focusTargetX = (scratchProjectedPos.x * 0.5) + 0.5;
+        focusTargetY = (scratchProjectedPos.y * 0.5) + 0.5;
       }
 
       // Smoothly LERP focus point coordinates to prevent cinematic jumps
@@ -2568,6 +2711,20 @@ export default function ThreeCanvas({
 
       // Smoothly LERP focus region size for dynamic focus breathing
       dofPass.uniforms.uFocusRange.value = THREE.MathUtils.lerp(dofPass.uniforms.uFocusRange.value, focusRangeTarget, 5.0 * delta);
+
+      // Compute 3D camera-view space depth of the focus target for physically grounded DoF
+      let targetFocalDepth = 160.0;
+      if (targetFocusPos) {
+        scratchCamSpacePos.copy(targetFocusPos).applyMatrix4(camera.matrixWorldInverse);
+        targetFocalDepth = -scratchCamSpacePos.z;
+      }
+
+      // Smoothly interpolate the camera's focal depth to prevent focus popping transitions
+      dofPass.uniforms.uFocalDepth.value = THREE.MathUtils.lerp(
+        dofPass.uniforms.uFocalDepth.value,
+        targetFocalDepth,
+        6.0 * delta
+      );
 
       // Heighten the OLED cinematic feel with a persistent yet responsive depth blur
       const targetDofEnabled = 1.0;
@@ -2579,29 +2736,36 @@ export default function ThreeCanvas({
 
       // ─── DYNAMIC BLOOM PASS ADAPTATION BASED ON SELECTION & CALIBRATION ───
       const targetBloomRadius = isAgentActive ? 1.0 : 0.5;
-      bloomPass.intensity = THREE.MathUtils.lerp(bloomPass.intensity, (isAgentActive ? 0.95 : 0.42) * bloomIntensityRef.current, 5.0 * delta);
+      // High-frequency bloom intensity boost to ensure extreme ring brilliance
+      const bloomIntensityBoost = isAgentActive ? 1.55 : 0.78;
+      bloomPass.intensity = THREE.MathUtils.lerp(
+        bloomPass.intensity,
+        bloomIntensityBoost * bloomIntensityRef.current,
+        5.0 * delta
+      );
       bloomPass.threshold = bloomThresholdRef.current;
 
       // Shift workspace ambient/point lights and core material colors towards agent accent color when active
       const activeAgent = agents.find((ag) => ag.index === activeIdx);
       if (activeAgent) {
-        const accentColObj = new THREE.Color(activeAgent.accentColor);
-        const stoneColObj = new THREE.Color(activeAgent.stoneColor);
+        scratchColorAccent.set(activeAgent.accentColor);
+        scratchColorStone.set(activeAgent.stoneColor);
 
-        pointLight2.color.lerp(accentColObj, 5.0 * delta);
-        pointLight1.color.lerp(stoneColObj, 5.0 * delta);
+        pointLight2.color.lerp(scratchColorAccent, 5.0 * delta);
+        pointLight1.color.lerp(scratchColorStone, 5.0 * delta);
 
-        coreMat.color.lerp(accentColObj, 5.0 * delta);
-        coreMat.emissive.lerp(accentColObj, 5.0 * delta);
+        coreMat.color.lerp(scratchColorAccent, 5.0 * delta);
+        coreMat.emissive.lerp(scratchColorAccent, 5.0 * delta);
       } else {
-        const defaultAccent = new THREE.Color(0x7c4df3);
-        const defaultStone = new THREE.Color(0xffd070);
+        scratchColorAccent.set(0x7c4df3);
+        scratchColorStone.set(0xffd070);
 
-        pointLight2.color.lerp(defaultAccent, 4.0 * delta);
-        pointLight1.color.lerp(defaultStone, 4.0 * delta);
+        pointLight2.color.lerp(scratchColorAccent, 4.0 * delta);
+        pointLight1.color.lerp(scratchColorStone, 4.0 * delta);
 
-        coreMat.color.lerp(new THREE.Color(0xff9900), 4.0 * delta);
-        coreMat.emissive.lerp(new THREE.Color(0xff9900), 4.0 * delta);
+        scratchColorOrange.set(0xff9900);
+        coreMat.color.lerp(scratchColorOrange, 4.0 * delta);
+        coreMat.emissive.lerp(scratchColorOrange, 4.0 * delta);
       }
 
       // 3. Interpolations & Ring Animations (Positions, scales, Hover materials, MotionBlur vector tracking)
@@ -2613,10 +2777,14 @@ export default function ThreeCanvas({
         // Smooth position positioning (LERP with integrated floating offset to prevent jumps)
         const ringAngle = (pr.index / 10) * Math.PI * 2;
         const ringFloatOffset = isSelected ? 0.0 : Math.sin(time * 1.5 + ringAngle) * 3.5;
-        const targetPos = isSelected 
-          ? new THREE.Vector3(0, 0, 18) 
-          : new THREE.Vector3(pr.homePos.x, pr.homePos.y + ringFloatOffset, pr.homePos.z);
-        pr.group.position.lerp(targetPos, 7.0 * delta);
+        
+        let tempTargetPos = scratchTargetPos;
+        if (isSelected) {
+          tempTargetPos.set(0, 0, 18);
+        } else {
+          tempTargetPos.set(pr.homePos.x, pr.homePos.y + ringFloatOffset, pr.homePos.z);
+        }
+        pr.group.position.lerp(tempTargetPos, 7.0 * delta);
         
         // Compute base and hover-multipled GSAP scale
         const scaleVal = pr.animState.scale * pr.animState.hoverScale;
@@ -2642,13 +2810,19 @@ export default function ThreeCanvas({
           pr.bandMesh.material.uniforms.uDoFBlur.value = THREE.MathUtils.lerp(currentDoF, targetDoF, 6.0 * delta);
         }
 
+        // Update custom glow shader material properties
+        if (pr.glowMat && pr.glowMat instanceof THREE.ShaderMaterial) {
+          pr.glowMat.uniforms.uTime.value = time;
+          pr.glowMat.uniforms.uHoverIntensity.value = pr.animState.hoverIntensity;
+        }
+
         // Update organic data stream curves connecting metropolis central hub with specialized enclaves
         if (pr.dataStreamLine) {
           const lineGeo = pr.dataStreamLine.geometry as THREE.BufferGeometry;
           const posAttribute = lineGeo.attributes.position as THREE.BufferAttribute;
           const posArray = posAttribute.array as Float32Array;
 
-          const hubPos = new THREE.Vector3(0, 0, 0); // central root hub position (metropolis center)
+          const hubPos = scratchHubPos; // central root hub position (metropolis center)
           const ringPos = pr.group.position; // live dynamic position of the active ring group
 
           const ptsCount = posAttribute.count;
@@ -2709,7 +2883,7 @@ export default function ThreeCanvas({
       if (targetHUDIndex !== -1 && physicalRings.length > 0) {
         const pr = physicalRings.find((r) => r.index === targetHUDIndex);
         if (pr) {
-          const tempV3 = new THREE.Vector3();
+          const tempV3 = scratchHUDTempV3;
           tempV3.setFromMatrixPosition(pr.group.matrixWorld);
           tempV3.project(camera);
 
@@ -2777,7 +2951,7 @@ export default function ThreeCanvas({
       if (hoveredRingIndex !== -1 && hoveredRingIndex !== targetHUDIndex && physicalRings.length > 0) {
         const hPr = physicalRings.find((r) => r.index === hoveredRingIndex);
         if (hPr) {
-          const tempV3 = new THREE.Vector3();
+          const tempV3 = scratchHUDTempV3;
           tempV3.setFromMatrixPosition(hPr.group.matrixWorld);
           tempV3.project(camera);
 
