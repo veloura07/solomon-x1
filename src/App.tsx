@@ -13,19 +13,14 @@ import {
   ShieldAlert, 
   Activity, 
   Terminal, 
-  Fingerprint, 
   Mic, 
   Send, 
-  Sparkles, 
   ShieldCheck, 
   Layers, 
   Cpu, 
   Coins, 
-  Flame,
-  Volume2,
   Lock,
-  GitBranch,
-  User
+  GitBranch
 } from "lucide-react";
 
 const INITIAL_AGENTS: AgentSpec[] = [
