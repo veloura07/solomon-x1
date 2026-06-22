@@ -80,26 +80,35 @@ const BlurShader = {
     uniform float uKernelSize;
     varying vec2 vUv;
     void main() {
-      float weight[5];
-      weight[0] = 0.2270270270;
-      weight[1] = 0.1945945946;
-      weight[2] = 0.1216216216;
-      weight[3] = 0.0540540541;
-      weight[4] = 0.0162162162;
-      
       vec2 offset = vec2(uKernelSize) / uResolution;
-      vec3 result = texture2D(tDiffuse, vUv).rgb * weight[0];
+      vec3 result = texture2D(tDiffuse, vUv).rgb * 0.2270270270;
+
       if (uHorizontal) {
-        for (int i = 1; i < 5; ++i) {
-          result += texture2D(tDiffuse, vUv + vec2(offset.x * float(i), 0.0)).rgb * weight[i];
-          result += texture2D(tDiffuse, vUv - vec2(offset.x * float(i), 0.0)).rgb * weight[i];
-        }
+        result += texture2D(tDiffuse, vUv + vec2(offset.x * 1.0, 0.0)).rgb * 0.1945945946;
+        result += texture2D(tDiffuse, vUv - vec2(offset.x * 1.0, 0.0)).rgb * 0.1945945946;
+
+        result += texture2D(tDiffuse, vUv + vec2(offset.x * 2.0, 0.0)).rgb * 0.1216216216;
+        result += texture2D(tDiffuse, vUv - vec2(offset.x * 2.0, 0.0)).rgb * 0.1216216216;
+
+        result += texture2D(tDiffuse, vUv + vec2(offset.x * 3.0, 0.0)).rgb * 0.0540540541;
+        result += texture2D(tDiffuse, vUv - vec2(offset.x * 3.0, 0.0)).rgb * 0.0540540541;
+
+        result += texture2D(tDiffuse, vUv + vec2(offset.x * 4.0, 0.0)).rgb * 0.0162162162;
+        result += texture2D(tDiffuse, vUv - vec2(offset.x * 4.0, 0.0)).rgb * 0.0162162162;
       } else {
-        for (int i = 1; i < 5; ++i) {
-          result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * float(i))).rgb * weight[i];
-          result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * float(i))).rgb * weight[i];
-        }
+        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 1.0)).rgb * 0.1945945946;
+        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 1.0)).rgb * 0.1945945946;
+
+        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 2.0)).rgb * 0.1216216216;
+        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 2.0)).rgb * 0.1216216216;
+
+        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 3.0)).rgb * 0.0540540541;
+        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 3.0)).rgb * 0.0540540541;
+
+        result += texture2D(tDiffuse, vUv + vec2(0.0, offset.y * 4.0)).rgb * 0.0162162162;
+        result += texture2D(tDiffuse, vUv - vec2(0.0, offset.y * 4.0)).rgb * 0.0162162162;
       }
+
       gl_FragColor = vec4(result, 1.0);
     }
   `
