@@ -422,6 +422,25 @@ export default function App() {
     setAuditLogs([addedLog, ...auditLogs]);
   };
 
+  // Monitor agents for critical reputation drops (< 50.0) to trigger toast notifications
+  const prevReputationsRef = useRef<Record<number, number>>({});
+  useEffect(() => {
+    agents.forEach(a => {
+      const prevRep = prevReputationsRef.current[a.index];
+      if (prevRep !== undefined) {
+        // Only trigger when crossing the 50.0 threshold downwards
+        if (prevRep >= 50.0 && a.reputationScore < 50.0) {
+          showToastNotification(
+            "Reputation Critical Alert",
+            `Warning: Idle Agent ${a.name} (Ring #${a.index}) reputation has dropped below 50.0% (${a.reputationScore.toFixed(1)}%). Consider a ring rotation to restore cognitive focus!`,
+            "warning"
+          );
+        }
+      }
+      prevReputationsRef.current[a.index] = a.reputationScore;
+    });
+  }, [agents]);
+
   // Idle Reputation Decay mechanic and active agent validation reward
   useEffect(() => {
     const interval = setInterval(() => {
@@ -638,6 +657,21 @@ export default function App() {
       action: () => {
         handleManualReconnect();
         showToastNotification("WEBSOCKET RECOVERY FORCED", "Bypassed exponential backup delays. Pinging loopback pool...", "info");
+      }
+    },
+    {
+      label: "Simulate Critical Agent Stagnation",
+      category: "Resource Economy",
+      description: "Artificially diminish an idle agent's reputation score below 50.0% to test recovery advisory toast",
+      action: () => {
+        setAgents(prev => {
+          // Find first idle agent
+          const idleAg = prev.find(a => a.index !== selectedRingIndex);
+          if (idleAg) {
+            return prev.map(a => a.index === idleAg.index ? { ...a, reputationScore: 49.5 } : a);
+          }
+          return prev;
+        });
       }
     },
     ...agents.map(ag => ({

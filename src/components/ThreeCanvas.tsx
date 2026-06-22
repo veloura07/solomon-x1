@@ -33,6 +33,51 @@ const LineFragShader = `
   }
 `;
 
+const AuraVertShader = `
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vPosition;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewPosition = -mvPosition.xyz;
+    vPosition = position;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const AuraFragShader = `
+  uniform vec3 uColor;
+  uniform float uTime;
+  uniform float uConfidence;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vPosition;
+  
+  void main() {
+    vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(vViewPosition);
+    
+    // Fresnel rim light formula
+    float intensity = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+    
+    // Pulsating rate and depth depend on the agent's confidence score
+    float speed = 1.8 + uConfidence * 4.2;
+    float pulse = 0.65 + 0.35 * sin(uTime * speed);
+    
+    // Getting more intense as it nears 1.0
+    // We scale the brightness exponentially by confidenceScore to make 1.0 look spectacular
+    float confidenceGlowBoost = pow(uConfidence, 2.8) * 2.2 + 0.35;
+    vec3 finalGlow = uColor * intensity * pulse * confidenceGlowBoost * 4.5;
+    
+    // Add subtle scrolling horizontal wave ripples
+    float ripple = sin(vPosition.y * 6.0 - uTime * 6.5) * 0.15 + 0.85;
+    finalGlow *= ripple;
+    
+    gl_FragColor = vec4(finalGlow, intensity * pulse * (0.35 + uConfidence * 0.55));
+  }
+`;
+
 // Multi-pass Gaussian Bloom shaders and pass implementation
 const BrightShader = {
   uniforms: {
@@ -1912,6 +1957,24 @@ export default function ThreeCanvas({
     scanRingMesh.rotation.x = Math.PI / 2;
     avatarGroup.add(scanRingMesh);
 
+    // High-fidelity pulsating agent archetype aura
+    const auraGeo = new THREE.SphereGeometry(5.4, 32, 32);
+    const auraMat = new THREE.ShaderMaterial({
+      vertexShader: AuraVertShader,
+      fragmentShader: AuraFragShader,
+      uniforms: {
+        uColor: { value: new THREE.Color(0x7c4df3) },
+        uTime: { value: 0.0 },
+        uConfidence: { value: 0.9 }
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
+    });
+    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
+    avatarGroup.add(auraMesh);
+
     // ─── INTERACTION LENS BILLBOARD PLANE SETUP ───
     const lensCanvas = document.createElement("canvas");
     lensCanvas.width = 512;
@@ -3218,6 +3281,11 @@ export default function ThreeCanvas({
       waveMat.uniforms.uColor.value.copy(scratchColorActive);
       avatarCloudMat.color.copy(scratchColorActive);
       scanRingMat.color.copy(scratchColorActive);
+
+      // Update high-fidelity pulsating archetype aura parameters
+      auraMat.uniforms.uColor.value.copy(scratchColorActive);
+      auraMat.uniforms.uTime.value = time;
+      auraMat.uniforms.uConfidence.value = agentConfidence;
 
       // Animate speaking vocal soundwave analyzer loop
       const wavePosAttr = waveGeo.attributes.position as THREE.BufferAttribute;
