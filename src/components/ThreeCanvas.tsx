@@ -515,7 +515,11 @@ const CinematicDoFShader = {
 
       // Cinematic OLED depth: analyze physical focal offset
       float depthDiff = abs(currentDepth - uFocalDepth);
-      float blurFactor = smoothstep(1.5, 55.0, depthDiff) * uMaxBlur * uEnabled;
+      
+      // Dynamic focal corridor tolerance scaled by uAperture
+      float minFocusRange = uAperture * 0.15;
+      float maxFocusRange = uAperture * 4.5;
+      float blurFactor = smoothstep(minFocusRange, maxFocusRange, depthDiff) * uMaxBlur * uEnabled;
       
       if (blurFactor < 0.1) {
         gl_FragColor = baseColor;
@@ -1584,6 +1588,163 @@ export default function ThreeCanvas({
     scanRingMesh.rotation.x = Math.PI / 2;
     avatarGroup.add(scanRingMesh);
 
+    // ─── INTERACTION LENS BILLBOARD PLANE SETUP ───
+    const lensCanvas = document.createElement("canvas");
+    lensCanvas.width = 512;
+    lensCanvas.height = 256;
+    const lensCtx = lensCanvas.getContext("2d");
+    const lensTexture = new THREE.CanvasTexture(lensCanvas);
+    
+    const lensMat = new THREE.MeshBasicMaterial({
+      map: lensTexture,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.NormalBlending,
+      side: THREE.DoubleSide,
+    });
+    const lensGeo = new THREE.PlaneGeometry(16, 8); // widescreen HUD display proportions
+    const lensMesh = new THREE.Mesh(lensGeo, lensMat);
+    scene.add(lensMesh);
+
+    // Function to dynamically update and paint data onto the lens canvas texture
+    const updateLensCanvas = (agentIdx: number) => {
+      if (!lensCtx) return;
+      
+      const agent = agents.find(ag => ag.index === agentIdx);
+      if (!agent) return;
+
+      lensCtx.clearRect(0, 0, 512, 256);
+
+      const agentColorStr = '#' + agent.accentColor.toString(16).padStart(6, '0');
+      const reputationPercent = agent.reputationScore.toFixed(1);
+      const tokenVal = agent.tokenPool;
+      const confidencePercent = (agent.confidenceScore * 100).toFixed(0);
+
+      // Draw subtle shadow backing for legibility
+      lensCtx.fillStyle = "rgba(2, 6, 23, 0.9)";
+      
+      // Paint futuristic container with cut corners (cyberpunk aesthetic)
+      lensCtx.beginPath();
+      lensCtx.moveTo(20, 10);
+      lensCtx.lineTo(440, 10);
+      lensCtx.lineTo(502, 72);
+      lensCtx.lineTo(502, 246);
+      lensCtx.lineTo(72, 246);
+      lensCtx.lineTo(10, 184);
+      lensCtx.lineTo(10, 10);
+      lensCtx.closePath();
+      lensCtx.fill();
+
+      // Outer glow and border matching agent color accent
+      lensCtx.strokeStyle = agentColorStr;
+      lensCtx.lineWidth = 4;
+      lensCtx.stroke();
+
+      // Interior thin grid line
+      lensCtx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      lensCtx.lineWidth = 1.5;
+      lensCtx.strokeRect(15, 15, 482, 226);
+
+      // Corner technical crosshairs / decorations
+      lensCtx.fillStyle = agentColorStr;
+      // top-left cross
+      lensCtx.fillRect(15, 25, 18, 2);
+      lensCtx.fillRect(25, 15, 2, 18);
+      // bottom-right cross
+      lensCtx.fillRect(479, 215, 18, 2);
+      lensCtx.fillRect(487, 215, 2, 18);
+
+      // Title header
+      lensCtx.font = "bold 13px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = "rgba(148, 163, 184, 0.85)"; // Slate-400
+      lensCtx.fillText("[ COGNITIVE LENS ACTIVE ]", 35, 45);
+
+      // Status indicator tag
+      lensCtx.fillStyle = "rgba(34, 197, 94, 0.15)";
+      lensCtx.strokeStyle = "rgb(34, 197, 94)";
+      lensCtx.lineWidth = 1;
+      lensCtx.beginPath();
+      lensCtx.arc(435, 41, 4, 0, Math.PI * 2);
+      lensCtx.fill();
+      lensCtx.stroke();
+      
+      lensCtx.font = "bold 10px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = "rgb(34, 197, 94)";
+      lensCtx.fillText("TRACKED", 448, 45);
+
+      // Agent Name & Archetype Role
+      lensCtx.font = "900 24px 'Space Grotesk', 'Outfit', Inter, sans-serif";
+      lensCtx.fillStyle = "#ffffff";
+      const agentRoleLabel = agent.name.toUpperCase();
+      lensCtx.fillText(agentRoleLabel, 35, 84);
+
+      // Divider line
+      lensCtx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      lensCtx.beginPath();
+      lensCtx.moveTo(35, 96);
+      lensCtx.lineTo(477, 96);
+      lensCtx.stroke();
+
+      // Content text
+      lensCtx.font = "14px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = "rgb(156, 163, 175)";
+      lensCtx.fillText("REPUTATION RATING :", 38, 126);
+      
+      lensCtx.font = "bold 20px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = agentColorStr;
+      lensCtx.fillText(`${reputationPercent}%`, 255, 128);
+
+      lensCtx.font = "14px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = "rgb(156, 163, 175)";
+      lensCtx.fillText("RESOURCE CONSUMED :", 38, 160);
+
+      lensCtx.font = "bold 20px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = "#f3f4f6";
+      lensCtx.fillText(`${tokenVal} COG`, 255, 162);
+
+      // Token pool consumption mini-bar (progress bar relative to 2000 COG max limit)
+      const progressX = 38;
+      const progressY = 184;
+      const progressW = 438;
+      const progressH = 14;
+
+      // Track background
+      lensCtx.fillStyle = "rgba(15, 23, 42, 0.75)";
+      lensCtx.fillRect(progressX, progressY, progressW, progressH);
+      lensCtx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      lensCtx.strokeRect(progressX, progressY, progressW, progressH);
+
+      // Highlight fill
+      const maxTokenLimit = 2000;
+      const progressRatio = Math.max(0.05, Math.min(1.0, tokenVal / maxTokenLimit));
+      const fillW = progressW * progressRatio;
+
+      const fillGrad = lensCtx.createLinearGradient(progressX, progressY, progressX + fillW, progressY);
+      fillGrad.addColorStop(0, agentColorStr);
+      fillGrad.addColorStop(1, "#ffffff");
+      lensCtx.fillStyle = fillGrad;
+      lensCtx.fillRect(progressX, progressY, fillW, progressH);
+
+      // Draw grid segments over progress-bar for a textured computer interface look
+      lensCtx.strokeStyle = "rgba(2, 6, 23, 0.65)";
+      lensCtx.lineWidth = 1.5;
+      for (let offset = 12; offset < progressW; offset += 12) {
+        lensCtx.beginPath();
+        lensCtx.moveTo(progressX + offset, progressY);
+        lensCtx.lineTo(progressX + offset, progressY + progressH);
+        lensCtx.stroke();
+      }
+
+      // Metadata footer text
+      lensCtx.font = "italic 10px 'JetBrains Mono', 'Fira Code', Courier, monospace";
+      lensCtx.fillStyle = "rgba(148, 163, 184, 0.6)";
+      lensCtx.fillText(`COGNITIVE TELEMETRY CONSOLE V${(1.2 + agentIdx * 0.1).toFixed(1)} // COG_BAND: ${confidencePercent}%`, 38, 222);
+
+      lensTexture.needsUpdate = true;
+    };
+
     // ─── PART 7: THE 10 RINGS OF SOLOMON ───────────────────
     const physicalRings = [] as {
       index: number;
@@ -2256,6 +2417,7 @@ export default function ThreeCanvas({
     let targetDPRScale = currentDPRScale;
     let lastScalingTime = performance.now();
     let prevActiveIdx = -2;
+    let lastRenderedHoverIdx = -2;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -2800,6 +2962,14 @@ export default function ThreeCanvas({
         5.0 * delta
       );
 
+      // Dynamic cinematic aperture based on active selection to compress focal plane
+      const targetAperture = isAgentActive ? 4.2 : 12.0;
+      dofPass.uniforms.uAperture.value = THREE.MathUtils.lerp(
+        dofPass.uniforms.uAperture.value,
+        targetAperture,
+        5.0 * delta
+      );
+
       // ─── DYNAMIC BLOOM PASS ADAPTATION BASED ON SELECTION & CALIBRATION ───
       const targetBloomRadius = isAgentActive ? 1.05 : 0.85;
       // High-frequency bloom intensity boost with slow cosmic breathing oscillation to ensure extreme ring brilliance
@@ -2945,6 +3115,45 @@ export default function ThreeCanvas({
           pr.stoneMesh.scale.setScalar(1.0);
         }
       });
+
+      // ─── INTERACTION LENS BILLBOARD PLANE ANIMATION & UPDATES ───
+      // Only display the overlay when hovering over a NON-active, valid ring
+      const isInteractionLensActive = (hoveredRingIndex !== -1 && hoveredRingIndex !== activeIdx);
+      const targetLensOpacity = isInteractionLensActive ? 1.0 : 0.0;
+      lensMat.opacity = THREE.MathUtils.lerp(lensMat.opacity, targetLensOpacity, 8.0 * delta);
+
+      if (isInteractionLensActive) {
+        const hoveredPr = physicalRings.find((p) => p.index === hoveredRingIndex);
+        if (hoveredPr) {
+          // Re-render canvas if the hovered index has shifted
+          if (hoveredRingIndex !== lastRenderedHoverIdx) {
+            updateLensCanvas(hoveredRingIndex);
+            lastRenderedHoverIdx = hoveredRingIndex;
+          }
+
+          // Fetch the world position of the hovered ring group
+          const hoveredWorldPos = scratchHUDTempV3;
+          hoveredPr.group.getWorldPosition(hoveredWorldPos);
+
+          // Position the billboard beautifully: float slightly above and behind the hovered ring
+          // to make sure it doesn't obstruct the torus itself but provides a sleek side callout
+          const lensOffset = new THREE.Vector3(0, 11.0, 3.0); // local offset floated above/closer
+          lensOffset.applyQuaternion(camera.quaternion); // align to camera view orientation
+          
+          const lensTargetPos = hoveredWorldPos.add(lensOffset);
+          lensMesh.position.lerp(lensTargetPos, 12.0 * delta);
+          
+          // Make sure the lens plane scale is active
+          lensMesh.scale.set(1.0, 1.0, 1.0);
+        }
+      } else {
+        lastRenderedHoverIdx = -1;
+        // Float the billboard out or shrink it down slightly when closing
+        lensMesh.scale.lerp(new THREE.Vector3(0.001, 0.001, 0.001), 10.0 * delta);
+      }
+
+      // Billboard orientation alignment: ensure the plane is always strictly orthogonal to the camera viewpoint
+      lensMesh.quaternion.copy(camera.quaternion);
 
       // Apply dynamic camera-screen motion blur pass values smoothly
       motionBlurPass.uniforms.uVelocity.value.x = THREE.MathUtils.lerp(motionBlurPass.uniforms.uVelocity.value.x, calculatedMotionBlurVector.x, 6.0 * delta);
