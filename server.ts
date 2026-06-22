@@ -13,6 +13,14 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
 // Initialize Gemini SDK securely (server-side only)
 const apiKey = process.env.GEMINI_API_KEY;
 let ai: GoogleGenAI | null = null;
@@ -182,7 +190,7 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
       } catch (err: any) {
         console.error("[WS ERROR]", err);
         ws.send(JSON.stringify({ event: "status", state: "idle" }));
-        ws.send(JSON.stringify({ event: "error", message: err.message || "An error occurred inside Solomon's neural bus." }));
+        ws.send(JSON.stringify({ event: "error", message: "An error occurred inside Solomon's neural bus." }));
       }
     }
   });
@@ -218,6 +226,12 @@ app.post("/api/chat", async (req, res) => {
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: "Invalid chest payloads: messages must be an array." });
+  }
+
+  // Input validation
+  const isValidMessages = messages.every(msg => typeof msg.role === 'string' && typeof msg.content === 'string');
+  if (!isValidMessages) {
+    return res.status(400).json({ error: "Invalid message format." });
   }
 
   try {
@@ -271,7 +285,7 @@ app.post("/api/chat", async (req, res) => {
 
   } catch (err: any) {
     console.error("Consciousness core fault:", err);
-    res.status(500).json({ error: err.message || "Unknown error occurred on the neural bus." });
+    res.status(500).json({ error: "Unknown error occurred on the neural bus." });
   }
 });
 
@@ -285,6 +299,12 @@ app.post("/api/predict", async (req, res) => {
 
   if (!timeline || !Array.isArray(timeline)) {
     return res.status(400).json({ error: "Invalid timeline format. Expects array of events/context tags." });
+  }
+
+  // Input validation
+  const isValidTimeline = timeline.every(item => typeof item === 'string');
+  if (!isValidTimeline) {
+    return res.status(400).json({ error: "Invalid timeline items format." });
   }
 
   const prompt = `Analyze this timeline of actions/focus indices and forecast the user's high-probability anticipatory needs, potential cognitive bottlenecks, and ideal offloading triggers.
@@ -334,7 +354,7 @@ Provide result strictly in JSON schema format:
     res.json(parsed);
   } catch (err: any) {
     console.error("Anticipation system fault:", err);
-    res.status(500).json({ error: err.message || "Prediction core fail." });
+    res.status(500).json({ error: "Prediction core fail." });
   }
 });
 
