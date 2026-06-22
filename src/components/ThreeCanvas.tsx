@@ -2088,8 +2088,9 @@ export default function ThreeCanvas({
       outerHaloMesh?: THREE.Mesh;
       microGlyphMesh?: THREE.Mesh;
       dataRingMesh?: THREE.Points;
-      planetMesh?: THREE.Mesh;
-      planetRing?: THREE.Mesh;
+      planetMesh?: THREE.Mesh | THREE.Group;
+      planetRing?: THREE.Mesh | THREE.Group;
+      orbitalCage?: THREE.Group;
     }[];
 
     const DOMAIN_NAMES = [
@@ -2192,8 +2193,11 @@ export default function ThreeCanvas({
       const dataRingMesh = new THREE.Points(dataRingGeo, dataRingMat);
       g.add(dataRingMesh);
 
-      // Layer 6: Core Ring (Identity planetary core - "not a donut, but a planet with gravity")
-      const planetGeo = new THREE.SphereGeometry(2.0, 32, 32);
+      // Layer 6: Core Group (Geodesic Core + 6 Equator-Aligned Hexagonal Nodes)
+      const planetGroup = new THREE.Group();
+      g.add(planetGroup);
+
+      const planetGeo = new THREE.IcosahedronGeometry(1.6, 2);
       const planetMat = new THREE.MeshPhysicalMaterial({
         color: spec.stoneColor,
         emissive: spec.stoneColor,
@@ -2205,20 +2209,65 @@ export default function ThreeCanvas({
         transmission: 0.42,
         thickness: 0.8
       });
-      const planetMesh = new THREE.Mesh(planetGeo, planetMat);
-      g.add(planetMesh);
+      const planetCoreMesh = new THREE.Mesh(planetGeo, planetMat);
+      planetGroup.add(planetCoreMesh);
 
-      // Planetary rings orbiting the core domain sphere
-      const planetRingGeo = new THREE.TorusGeometry(3.0, 0.08, 16, 64);
-      const planetRingMat = new THREE.MeshBasicMaterial({
+      // Add 6 hexagonal sacred geometry nodes directly onto/around the planet core
+      const hexNodeGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.32, 6);
+      const hexNodesMat = new THREE.MeshPhysicalMaterial({
         color: spec.accentColor,
-        transparent: true,
-        opacity: 0.5,
-        wireframe: true
+        emissive: spec.accentColor,
+        emissiveIntensity: 1.25,
+        metalness: 0.9,
+        roughness: 0.05,
+        clearcoat: 1.0
       });
-      const planetRing = new THREE.Mesh(planetRingGeo, planetRingMat);
-      planetRing.rotation.x = Math.PI / 3;
-      g.add(planetRing);
+
+      for (let h = 0; h < 6; h++) {
+        const hexAngle = (h / 6) * Math.PI * 2;
+        const hexNode = new THREE.Mesh(hexNodeGeo, hexNodesMat);
+        hexNode.position.set(
+          Math.cos(hexAngle) * 1.85,
+          Math.sin(hexAngle) * 1.85,
+          0
+        );
+        hexNode.rotation.z = hexAngle;
+        hexNode.rotation.x = Math.PI / 2;
+        planetGroup.add(hexNode);
+      }
+
+      const planetMesh = planetGroup;
+
+      // Layer 4: Nested Orbital Cage (replaces the simple circular planetRing/torus model)
+      const orbitalCage = new THREE.Group();
+      g.add(orbitalCage);
+
+      const cageRingMat = new THREE.MeshPhysicalMaterial({
+        color: spec.accentColor,
+        emissive: spec.accentColor,
+        emissiveIntensity: 0.75,
+        metalness: 0.95,
+        roughness: 0.1,
+        clearcoat: 1.0,
+        wireframe: false
+      });
+
+      // Cage 1: Outer cage band
+      const cage1 = new THREE.Mesh(new THREE.TorusGeometry(3.3, 0.06, 16, 64), cageRingMat);
+      cage1.rotation.x = Math.PI / 4;
+      orbitalCage.add(cage1);
+
+      // Cage 2: Middle cage band
+      const cage2 = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.05, 16, 64), cageRingMat);
+      cage2.rotation.y = Math.PI / 4;
+      orbitalCage.add(cage2);
+
+      // Cage 3: Inner cage band
+      const cage3 = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.04, 16, 64), cageRingMat);
+      cage3.rotation.z = Math.PI / 4;
+      orbitalCage.add(cage3);
+
+      const planetRing = orbitalCage;
 
       // Create an additive volumetric atmospheric glow mesh around the torus band (ethereal bloom simulator)
       const glowGeo = new THREE.TorusGeometry(8, 1.55, 128, 512);
@@ -2438,6 +2487,7 @@ export default function ThreeCanvas({
         dataRingMesh,
         planetMesh,
         planetRing,
+        orbitalCage,
       });
     });
 
@@ -3662,7 +3712,7 @@ export default function ThreeCanvas({
 
         const speedMult = resonanceFreqMultiplier;
 
-        // Layer 1: Outer Halo rotation (rotating independently around local Z axis)
+         // Layer 1: Outer Halo rotation (rotating independently around local Z axis)
         if (pr.outerHaloMesh) {
           pr.outerHaloMesh.rotation.z += delta * 1.8 * directionFactor * domainFrequency * speedMult;
         }
@@ -3670,11 +3720,29 @@ export default function ThreeCanvas({
         if (pr.microGlyphMesh) {
           pr.microGlyphMesh.rotation.z += delta * 1.1 * -directionFactor * (domainFrequency * 0.85) * speedMult;
         }
+        // Layer 4: Nested Orbital Cage rotation (counter-rotational nested bands)
+        if (pr.orbitalCage && pr.orbitalCage.children.length >= 3) {
+          pr.orbitalCage.rotation.y -= delta * 0.35 * directionFactor * domainFrequency * speedMult;
+          
+          const cageRing1 = pr.orbitalCage.children[0] as THREE.Mesh;
+          const cageRing2 = pr.orbitalCage.children[1] as THREE.Mesh;
+          const cageRing3 = pr.orbitalCage.children[2] as THREE.Mesh;
+          
+          if (cageRing1) {
+            cageRing1.rotation.y += delta * 1.5 * domainFrequency * speedMult;
+          }
+          if (cageRing2) {
+            cageRing2.rotation.x -= delta * 1.0 * domainFrequency * speedMult;
+          }
+          if (cageRing3) {
+            cageRing3.rotation.z += delta * 1.8 * domainFrequency * speedMult;
+          }
+        }
         // Layer 5: Orbiting Data particles rotation
         if (pr.dataRingMesh) {
           pr.dataRingMesh.rotation.z += delta * 2.8 * directionFactor * (domainFrequency * 1.15) * speedMult;
         }
-        // Layer 6: Planetary Core slow rotation
+        // Layer 6: Planetary Core slow rotation (Core + 6 Hexagonal Nodes unit)
         if (pr.planetMesh) {
           pr.planetMesh.rotation.y += delta * 0.35 * domainFrequency * speedMult;
         }
