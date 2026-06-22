@@ -2932,6 +2932,24 @@ export default function ThreeCanvas({
         composer.setSize(container.clientWidth, container.clientHeight);
       }
 
+      const activeIdx = selectedIndexRef.current;
+      const isAgentActive = activeIdx !== -1;
+
+      // Extract Gemini confidence and system latency globally for use across multiple render layers & post-processing filters
+      let agentConfidence = 0.92;
+      const activeAgentSpec = activeIdx !== -1 ? agentsRef.current.find(a => a.index === activeIdx) : undefined;
+      if (activeAgentSpec) {
+        agentConfidence = activeAgentSpec.confidenceScore;
+      }
+      
+      const latestPoint = telemetryData && telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined;
+      const currentLatency = latestPoint?.geminiLatency ?? 1300; // latency in ms
+      
+      // Calculate dynamic pulse rate from system latency
+      const rawPulseSpeed = 1000.0 / Math.max(200.0, currentLatency); // cycles per second
+      const pulseFreqRad = (rawPulseSpeed * 2.0 * Math.PI) * 1.35; // speed up slightly for high-fidelity breathing
+      const stellarPulseFactor = Math.sin(time * pulseFreqRad);
+
       // Performance stats calculation
       frameCount++;
       const currentPerfTime = performance.now();
@@ -2969,8 +2987,7 @@ export default function ThreeCanvas({
         }
       }
 
-      const activeIdx = selectedIndexRef.current;
-      const isAgentActive = activeIdx !== -1;
+      // Removed redundant activeIdx / isAgentActive declarations (now global to animate)
 
       // ─── FIXED TIMESTEP ACCUMULATOR LOOP FOR PHYSIO-KINETIC CALCULATIONS ───
       physicsAccumulator += delta;
@@ -3107,22 +3124,7 @@ export default function ThreeCanvas({
       sigilGroup.rotation.z = time * 0.02;
 
       // ─── DYNAMIC STELLAR PULSE ANIMATION (FOR MIN STAR CORE & CORONA) ───
-      // Extract Gemini confidence and system latency
-      let agentConfidence = 0.92;
-      const activeAgentSpec = activeIdx !== -1 ? agentsRef.current.find(a => a.index === activeIdx) : undefined;
-      if (activeAgentSpec) {
-        agentConfidence = activeAgentSpec.confidenceScore;
-      }
-      
-      const latestPoint = telemetryData && telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined;
-      const currentLatency = latestPoint?.geminiLatency ?? 1300; // latency in ms
-      
-      // Calculate dynamic pulse rate from system latency
-      // A lower latency (e.g., 800ms) results in rapid, energetic pulsing.
-      // A higher latency (e.g., 2000ms) slows down to a heavy, deep breathing cadence.
-      const rawPulseSpeed = 1000.0 / Math.max(200.0, currentLatency); // cycles per second
-      const pulseFreqRad = (rawPulseSpeed * 2.0 * Math.PI) * 1.35; // speed up slightly for high-fidelity breathing
-      const stellarPulseFactor = Math.sin(time * pulseFreqRad);
+      // Utilizing globally extracted agentConfidence, currentLatency, and stellarPulseFactor
       
       // Animate core geodesic miniature star scale & rotation
       // Core star glows brighter and scales larger when confidence is higher
@@ -3798,6 +3800,38 @@ export default function ThreeCanvas({
       const ndcScreenY = (lightProjV.y * 0.5) + 0.5;
       godRaysPass.uniforms.uLightPositionScreen.value.set(ndcScreenX, ndcScreenY);
       godRaysPass.uniforms.uTime.value = clock.getElapsedTime();
+
+      // ─── VOLUMETRIC 'STELLAR PULSE' BLOOM PASS PARAMETER MODULATION ───
+      // We dynamically scale the God-Rays intensity, exposure, decay, and weight based on the Gemini API response latency.
+      // This visually demonstrates the system's thinking speed as a volumetric breathing, swelling star.
+      
+      // Normalize latency relative to a baseline of 1200ms
+      const normalizedLatency = Math.min(Math.max(currentLatency / 1200.0, 0.4), 3.5); // Range bounded [0.4, 3.5]
+      const breathingCoeff = (stellarPulseFactor * 0.5) + 0.5; // positive breathing range [0.0, 1.0]
+      
+      // Calculate exposure: higher latency (heavy processing/deep thinking) swells up the volumetric exposure,
+      // creating an intense, bright solar flare. Lower latency keeps the star energetic yet concentrated.
+      const targetExposure = 0.08 + (normalizedLatency * 0.14) * (1.1 + breathingCoeff * 1.1);
+      
+      // Calculate decay: determines how far the light rays extend.
+      // Higher latency expands the rays significantly (slower decay / higher factor).
+      const targetDecay = 0.88 + (normalizedLatency * 0.02) + (breathingCoeff * 0.02);
+      const clampedDecay = Math.max(0.85, Math.min(0.978, targetDecay));
+      
+      // Calculate density: spacing between light samples.
+      const targetDensity = 0.72 + (breathingCoeff * 0.16);
+      
+      // Calculate weight: controls the intensity of individual ray samples.
+      const targetWeight = 0.40 + (normalizedLatency * 0.10) + (breathingCoeff * 0.12);
+      
+      // Smoothly interpolate current God-Rays values toward their targets using LERP to avoid sudden jumps
+      godRaysPass.uniforms.uExposure.value = THREE.MathUtils.lerp(godRaysPass.uniforms.uExposure.value, targetExposure, 4.5 * delta);
+      godRaysPass.uniforms.uDecay.value = THREE.MathUtils.lerp(godRaysPass.uniforms.uDecay.value, clampedDecay, 4.5 * delta);
+      godRaysPass.uniforms.uDensity.value = THREE.MathUtils.lerp(godRaysPass.uniforms.uDensity.value, targetDensity, 4.5 * delta);
+      godRaysPass.uniforms.uWeight.value = THREE.MathUtils.lerp(godRaysPass.uniforms.uWeight.value, targetWeight, 4.5 * delta);
+      
+      const targetClampMax = 0.45 + (normalizedLatency * 0.18);
+      godRaysPass.uniforms.uClampMax.value = THREE.MathUtils.lerp(godRaysPass.uniforms.uClampMax.value, targetClampMax, 4.5 * delta);
 
       // Render backgrounds & main layers separately for high-fidelity composite depth
       renderer.autoClear = false;
