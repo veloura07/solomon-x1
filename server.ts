@@ -361,7 +361,11 @@ async function bootstrap() {
   });
 }
 
-bootstrap().catch(err => {
-  console.error("Fail to start Solomon compute Node:", err);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== "test") {
+  bootstrap().catch(err => {
+    console.error("Fail to start Solomon compute Node:", err);
+    process.exit(1);
+  });
+}
+
+export { app };
