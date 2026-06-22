@@ -786,21 +786,34 @@ const ringVertShader = `
   varying vec3 vNormal;
   varying vec3 vViewPosition;
 
-  float getBreathingNoise(vec3 p, float time, float rep) {
-    float speed = 1.6 + (100.0 - rep) * 0.04;
-    float amplitude = 0.02 + (100.0 - rep) * 0.002;
+  // Adaptive 3-Octave Fractal Brownian Motion (FBM) noise displacement
+  // Reacts dynamically to the agent's reputation level
+  float fbmNoise(vec3 p, float time, float rep) {
+    // Normal reputation range 45.0 to 100.0
+    // Lower reputation yields a more unstable, chaotic, rougher organic displacement.
+    // Higher reputation yields a pristine, harmonically resonant organic ripple.
+    float chaos = clamp((100.0 - rep) / 55.0, 0.0, 1.0);
     
-    float n = sin(p.x * 0.9 + time * speed) * cos(p.y * 0.9 + time * speed * 0.92) * sin(p.z * 0.9 + time * speed * 1.08);
-    n += 0.45 * sin(p.x * 2.3 - time * speed * 1.15) * cos(p.z * 2.3 + time * speed * 0.85);
+    float speed = 1.2 + chaos * 1.8;
+    float amp = 0.035 + chaos * 0.135; // Scales up to 0.17 under lower reputation
     
-    return n * amplitude;
+    // Wave Octave 1 - Broad physical swell
+    float n = sin(p.x * 0.78 + time * speed) * cos(p.y * 0.85 + time * speed * 0.95) * sin(p.z * 0.72 + time * speed * 1.05);
+    // Wave Octave 2 - Medium mechanical ripple
+    n += 0.52 * sin(p.x * 2.1 - time * speed * 1.35) * cos(p.y * 1.85 + time * speed * 1.15) * sin(p.z * 2.3 - time * speed * 0.85);
+    // Wave Octave 3 - Micro-high fidelity organic detail
+    n += 0.26 * sin(p.x * 4.9 + time * speed * 2.05) * cos(p.y * 4.25 - time * speed * 1.75) * sin(p.z * 4.45 + time * speed * 2.25);
+    
+    // Amplify the displacement roughness slightly when reputation drops to reflect cognitive fragmentation
+    n *= (1.0 + chaos * 0.45);
+    return n * amp;
   }
 
   void main() {
     vUv = uv;
     vec3 displacedPos = position;
     
-    float disp = getBreathingNoise(position, uTime, uReputationScore);
+    float disp = fbmNoise(position, uTime, uReputationScore);
     displacedPos += normal * disp;
 
     vec4 mvPosition = modelViewMatrix * vec4(displacedPos, 1.0);
@@ -969,7 +982,9 @@ const ringFragShader = `
     
     vec3 runesEmissive = uAccentColor * min(runeInlay, 2.0) * 1.8 * finalEmissiveIntensity;
     
-    vec3 baseEmissive = uEmissive * finalEmissiveIntensity;
+    // Linked to uAccentColor with a constant baseline to maintain a consistent, attractive glow
+    float baseGlowConstant = 0.55; // Ensures an attractive constant glow regardless of viewport activity
+    vec3 baseEmissive = mix(uEmissive, uAccentColor, 0.65) * (baseGlowConstant + finalEmissiveIntensity * 0.85);
     vec3 emissive = mix(baseEmissive, baseEmissive * 1.5 + runesEmissive, 0.6 + 0.4 * uHoverIntensity);
 
     // Micro-sparkles configuration with screen-space hardware anti-aliasing to prevent jagged edges on closeups
@@ -2616,31 +2631,38 @@ export default function ThreeCanvas({
       // ─── UPDATE AND EMIT LIGHT TRAILS ───
       physicalRings.forEach((pr) => {
         const isSelected = pr.index === activeIdx;
-        const emitProb = isSelected ? 0.95 : 0.4;
+        const emitProb = isSelected ? 0.98 : 0.45;
         
-        if (Math.random() < emitProb) {
-          scratchColorRing.set(pr.color);
-          const activeAgent = agents.find((ag) => ag.index === pr.index);
-          if (activeAgent) {
-            scratchColorAccent.set(activeAgent.accentColor);
-          } else {
-            scratchColorAccent.set(pr.color);
-          }
-          const blendedColor = scratchColorRing.clone().lerp(scratchColorAccent, 0.45);
+        // Spawn multiple particles per frame if selected to provide a dense, highly visual soft cloud trail
+        const spawnCount = isSelected ? 5 : 1;
+        for (let s = 0; s < spawnCount; s++) {
+          if (Math.random() < emitProb) {
+            scratchColorRing.set(pr.color);
+            const activeAgent = agents.find((ag) => ag.index === pr.index);
+            if (activeAgent) {
+              scratchColorAccent.set(activeAgent.accentColor);
+            } else {
+              scratchColorAccent.set(pr.color);
+            }
+            const blendedColor = scratchColorRing.clone().lerp(scratchColorAccent, 0.55);
 
-          activeTrails.push({
-            pos: new THREE.Vector3(),
-            color: blendedColor,
-            size: (isSelected ? 5.2 : 2.6) * (0.6 + Math.random() * 0.9),
-            age: 0,
-            maxAge: 0.8 + Math.random() * 1.0,
-            theta: Math.random() * Math.PI * 2,
-            radialOffset: (Math.random() - 0.5) * 0.6,
-            speed: (0.8 + Math.random() * 1.2) * (isSelected ? 2.5 : 1.0),
-            ringIndex: pr.index,
-            ringRef: pr,
-            zWobbleFreq: 2.0 + Math.random() * 4.0,
-          });
+            // Give selected particles an extended, organically pulsing age distribution
+            const particleAgeSpread = 1.0 + Math.random() * 1.5;
+
+            activeTrails.push({
+              pos: new THREE.Vector3(),
+              color: blendedColor,
+              size: (isSelected ? 7.6 : 3.0) * (0.6 + Math.random() * 1.1),
+              age: 0,
+              maxAge: (isSelected ? 1.5 : 0.85) * particleAgeSpread,
+              theta: Math.random() * Math.PI * 2,
+              radialOffset: (Math.random() - 0.5) * (isSelected ? 1.8 : 0.6),
+              speed: (0.7 + Math.random() * 1.3) * (isSelected ? 3.2 : 1.05),
+              ringIndex: pr.index,
+              ringRef: pr,
+              zWobbleFreq: (isSelected ? 4.5 : 2.0) + Math.random() * 4.0,
+            });
+          }
         }
       });
 
@@ -2666,24 +2688,32 @@ export default function ThreeCanvas({
             // increment angle around the torus ring path
             pt.theta += pt.speed * delta;
 
-            const radius = 8.0 + pt.radialOffset;
+            const isSelected = pt.ringIndex === activeIdx;
+            const pct = pt.age / pt.maxAge;
+            const alpha = 1.0 - pct;
+
+            // Apply soft outward spiraling and age-based organic drift for high-fidelity particles
+            const radius = (8.0 + pt.radialOffset) * (1.0 + (isSelected ? 0.32 * pct : 0.08 * pct));
             const localX = Math.cos(pt.theta) * radius;
             const localY = Math.sin(pt.theta) * radius;
-            const localZ = Math.sin(pt.theta * pt.zWobbleFreq + pt.age * 5.0) * 0.5;
+            const localZ = Math.sin(pt.theta * pt.zWobbleFreq + pt.age * 6.5) * (0.45 + (isSelected ? 1.12 * pct : 0.15));
 
             scratchLocalPos.set(localX, localY, localZ);
             pt.pos.copy(scratchLocalPos).applyMatrix4(pr.group.matrixWorld);
 
-            const pct = pt.age / pt.maxAge;
-            const alpha = 1.0 - pct;
+            // Add subtle floating upward drift to the selected particle trail for fluid aesthetic
+            if (isSelected) {
+              pt.pos.y += pct * 2.2;
+              pt.pos.z += Math.sin(pt.age * 2.8) * 0.85;
+            }
 
             posArr[traceCount * 3] = pt.pos.x;
             posArr[traceCount * 3 + 1] = pt.pos.y;
             posArr[traceCount * 3 + 2] = pt.pos.z;
 
-            colArr[traceCount * 3] = pt.color.r * alpha * 2.2;
-            colArr[traceCount * 3 + 1] = pt.color.g * alpha * 2.2;
-            colArr[traceCount * 3 + 2] = pt.color.b * alpha * 2.2;
+            colArr[traceCount * 3] = pt.color.r * alpha * 2.5;
+            colArr[traceCount * 3 + 1] = pt.color.g * alpha * 2.5;
+            colArr[traceCount * 3 + 2] = pt.color.b * alpha * 2.5;
 
             sizeArr[traceCount] = pt.size * alpha;
 
@@ -2774,13 +2804,21 @@ export default function ThreeCanvas({
       const targetBloomRadius = isAgentActive ? 1.05 : 0.85;
       // High-frequency bloom intensity boost with slow cosmic breathing oscillation to ensure extreme ring brilliance
       const bloomBreathing = 1.0 + Math.sin(time * 1.5) * 0.25;
-      const bloomIntensityBoost = (isAgentActive ? 2.8 : 2.2) * bloomBreathing;
+      
+      // When a user hovers their mouse over a specific ring, elevate bloom parameters for a high-impact visual pulse feedback
+      const isAnyRingHovered = (hoveredRingIndex !== -1);
+      const hoverIntensityMul = isAnyRingHovered ? 1.85 : 1.0;
+      const hoverThresholdMul = isAnyRingHovered ? 1.45 : 1.0;
+
+      const bloomIntensityBoost = (isAgentActive ? 2.8 : 2.2) * bloomBreathing * hoverIntensityMul;
       bloomPass.intensity = THREE.MathUtils.lerp(
         bloomPass.intensity,
         bloomIntensityBoost * bloomIntensityRef.current,
         5.0 * delta
       );
-      bloomPass.threshold = THREE.MathUtils.lerp(bloomPass.threshold, bloomThresholdRef.current * (isAgentActive ? 0.75 : 0.9), 5.0 * delta);
+      
+      const targetThreshold = bloomThresholdRef.current * (isAgentActive ? 0.75 : 0.9) * hoverThresholdMul;
+      bloomPass.threshold = THREE.MathUtils.lerp(bloomPass.threshold, targetThreshold, 5.0 * delta);
 
       // Shift workspace ambient/point lights and core material colors towards agent accent color when active
       const activeAgent = agents.find((ag) => ag.index === activeIdx);
