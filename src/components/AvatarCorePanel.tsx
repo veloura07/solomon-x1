@@ -1,16 +1,8 @@
 import { useState, useEffect } from "react";
 import { 
   Volume2, 
-  Layers, 
-  Activity, 
   User, 
-  Sparkles, 
-  Cpu, 
-  HelpCircle,
-  Sliders,
-  Settings,
-  Flame,
-  Globe
+  Settings
 } from "lucide-react";
 
 interface AvatarCorePanelProps {
