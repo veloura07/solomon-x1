@@ -393,12 +393,7 @@ export default function App() {
 
   // Generate simple random hash
   const generateHash = () => {
-    const chars = "abcdef0123456789";
-    let hash = "";
-    for (let i = 0; i < 64; i++) {
-      hash += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return hash;
+    return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
   };
 
   // Add memory handler
