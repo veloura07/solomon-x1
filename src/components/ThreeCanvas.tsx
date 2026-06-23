@@ -1213,6 +1213,8 @@ interface ThreeCanvasProps {
   agents: AgentSpec[];
   bloomThreshold?: number;
   bloomIntensity?: number;
+  bloomEnabled?: boolean;
+  setBloomEnabled?: (val: boolean) => void;
   auditLogs?: AuditLog[];
   telemetryData?: TelemetryPoint[];
   sendingChat?: boolean;
@@ -1226,6 +1228,8 @@ export default function ThreeCanvas({
   agents,
   bloomThreshold = 0.22,
   bloomIntensity = 1.5,
+  bloomEnabled = true,
+  setBloomEnabled = () => {},
   auditLogs = [],
   telemetryData = [],
   sendingChat = false,
@@ -1258,6 +1262,7 @@ export default function ThreeCanvas({
 
   const bloomThresholdRef = useRef<number>(bloomThreshold);
   const bloomIntensityRef = useRef<number>(bloomIntensity);
+  const bloomEnabledRef = useRef<boolean>(!!bloomEnabled);
   
   const sendingChatRef = useRef<boolean>(!!sendingChat);
   const isListeningMicRef = useRef<boolean>(!!isListeningMic);
@@ -1280,6 +1285,10 @@ export default function ThreeCanvas({
     bloomThresholdRef.current = bloomThreshold;
     bloomIntensityRef.current = bloomIntensity;
   }, [bloomThreshold, bloomIntensity]);
+
+  useEffect(() => {
+    bloomEnabledRef.current = !!bloomEnabled;
+  }, [bloomEnabled]);
 
   // Sync selected index and trigger GSAP animations
   useEffect(() => {
@@ -3603,6 +3612,7 @@ export default function ThreeCanvas({
       );
 
       // ─── DYNAMIC BLOOM PASS ADAPTATION BASED ON SELECTION & CALIBRATION ───
+      bloomPass.enabled = bloomEnabledRef.current;
       const targetBloomRadius = isAgentActive ? 1.05 : 0.85;
       // High-frequency bloom intensity boost with slow cosmic breathing oscillation to ensure extreme ring brilliance
       const bloomBreathing = 1.0 + Math.sin(time * 1.5) * 0.25;
@@ -4124,7 +4134,11 @@ export default function ThreeCanvas({
 
       
       {/* FPS & Draw-Calls Overlay */}
-      <div id="canvas-performance-monitor" className="absolute top-4 right-4 z-10 pointer-events-none bg-slate-950/85 backdrop-blur-md px-3 py-2 border border-slate-800/80 rounded-xl text-[10px] font-mono text-slate-300 space-y-1.5 min-w-[135px] hover:opacity-10 transition-opacity flex flex-col shadow-lg shadow-black/50">
+      <div 
+        id="canvas-performance-monitor" 
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-4 right-4 z-10 pointer-events-auto bg-slate-950/90 backdrop-blur-md px-3 py-2 border border-slate-800/80 hover:border-purple-500/30 rounded-xl text-[10px] font-mono text-slate-300 space-y-1.5 min-w-[155px] flex flex-col shadow-lg shadow-black/50 transition-all duration-300"
+      >
         <div className="text-slate-500 font-bold border-b border-slate-900 pb-1 mb-0.5 flex items-center justify-between gap-1">
           <div className="flex items-center gap-1">
             <Activity className="w-3 h-3 text-orange-400 animate-pulse" />
@@ -4146,7 +4160,27 @@ export default function ThreeCanvas({
         </div>
         <div className="flex justify-between gap-3 border-t border-slate-900/60 pt-1 mt-0.5">
           <span className="text-slate-500 uppercase font-sans font-bold">Glow:</span>
-          <span id="perf-glow-val" className="text-amber-400 font-medium">1.5x</span>
+          <span id="perf-glow-val" className={`text-amber-400 font-medium ${bloomEnabled ? "" : "opacity-30 line-through"}`}>{bloomEnabled ? "1.5x" : "OFF"}</span>
+        </div>
+        
+        {/* Unreal Bloom Quick Toggle */}
+        <div className="flex justify-between items-center gap-3 border-t border-slate-900/60 pt-1.5 mt-0.5">
+          <span className="text-slate-500 uppercase font-sans font-bold">Bloom:</span>
+          <button
+            onClick={() => {
+              if (setBloomEnabled) {
+                setBloomEnabled(!bloomEnabled);
+              }
+            }}
+            className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-all tracking-wider cursor-pointer ${
+              bloomEnabled 
+                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30" 
+                : "bg-slate-900 text-slate-500 border border-slate-800 hover:text-slate-400 hover:bg-slate-850"
+            }`}
+            title="Toggle Unreal Bloom filter to optimize FPS on lower-end devices"
+          >
+            {bloomEnabled ? "HDR ON" : "LDR OFF"}
+          </button>
         </div>
       </div>
 

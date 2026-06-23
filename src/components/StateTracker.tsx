@@ -10,6 +10,8 @@ interface StateTrackerProps {
   setBloomThreshold: (val: number) => void;
   bloomIntensity: number;
   setBloomIntensity: (val: number) => void;
+  bloomEnabled: boolean;
+  setBloomEnabled: (val: boolean) => void;
 }
 
 export default function StateTracker({ 
@@ -18,7 +20,9 @@ export default function StateTracker({
   bloomThreshold,
   setBloomThreshold,
   bloomIntensity,
-  setBloomIntensity
+  setBloomIntensity,
+  bloomEnabled,
+  setBloomEnabled
 }: StateTrackerProps) {
   const [activeSimulationMode, setActiveSimulationMode] = useState<"Quiet" | "HeavyCode" | "Distracted">("Quiet");
 
@@ -159,7 +163,25 @@ export default function StateTracker({
             Calibrate the real-time bloom processing filters of the Solomon rings to accommodate custom screen resolutions.
           </p>
 
-          <div className="space-y-4 pt-1 font-mono">
+          {/* Quick Toggle for Bloom Post-Processing */}
+          <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 flex items-center justify-between gap-3 text-xs">
+            <div className="space-y-0.5 text-left">
+              <span className="text-slate-200 font-bold tracking-wide block font-sans">Unreal Bloom Filter</span>
+              <span className="text-[9px] text-slate-500 block font-sans">Optimize FPS on lower-end devices</span>
+            </div>
+            <button
+              onClick={() => setBloomEnabled(!bloomEnabled)}
+              className={`px-3 py-1.5 rounded-lg font-bold uppercase transition-all tracking-wider text-[9px] border cursor-pointer ${
+                bloomEnabled 
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30" 
+                  : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300 hover:bg-slate-850"
+              }`}
+            >
+              {bloomEnabled ? "ENABLED" : "DISABLED"}
+            </button>
+          </div>
+
+          <div className={`space-y-4 pt-1 font-mono transition-opacity duration-300 ${bloomEnabled ? "" : "opacity-35 pointer-events-none"}`}>
             <div>
               <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1 font-mono">
                 <span>Bloom Threshold</span>

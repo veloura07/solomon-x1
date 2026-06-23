@@ -32,7 +32,9 @@ import {
   Search,
   Command,
   RefreshCw,
-  Sliders
+  Sliders,
+  Bell,
+  Trash2
 } from "lucide-react";
 
 const INITIAL_AGENTS: AgentSpec[] = [
@@ -199,11 +201,39 @@ const INITIAL_AGENTS: AgentSpec[] = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin'>('presence');
+  const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin' | 'alerts'>('presence');
   const [selectedRingIndex, setSelectedRingIndex] = useState(9); // Ars Regalis active by default
   const [rotationLocked, setRotationLocked] = useState(false);
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
+  
+  // Persistent notification history registry
+  const [notifications, setNotifications] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    type: 'success' | 'warning' | 'info';
+    timestamp: string;
+    read: boolean;
+    agentIndex?: number;
+  }[]>([
+    {
+      id: "notif_init_1",
+      title: "Solomon-X OS Boot Alert",
+      message: "Decentralized cognitive senate unsealed successfully. Secure L0-L3 memory registers validated.",
+      type: "success",
+      timestamp: new Date(Date.now() - 3600000).toISOString(),
+      read: true
+    },
+    {
+      id: "notif_init_2",
+      title: "Advisory: Cognitive Wear-and-Tear",
+      message: "Notice: Cognitive rot decay simulation is operational. Idle agent indexes will lose fractional reputation. Shifting focused ring rotation highly recommended.",
+      type: "info",
+      timestamp: new Date(Date.now() - 1800000).toISOString(),
+      read: false
+    }
+  ]);
   
   const handleSelectRing = (idx: number) => {
     if (idx === selectedRingIndex) return;
@@ -234,6 +264,7 @@ export default function App() {
 
   const [bloomThreshold, setBloomThreshold] = useState<number>(0.22);
   const [bloomIntensity, setBloomIntensity] = useState<number>(1.5);
+  const [bloomEnabled, setBloomEnabled] = useState<boolean>(true);
 
   // Biometric & Telemetry Pulse States
   const [biometricPulseActive, setBiometricPulseActive] = useState(false);
@@ -248,9 +279,25 @@ export default function App() {
   const [activeToast, setActiveToast] = useState<{ title: string; message: string; type: 'success' | 'warning' | 'info' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showToastNotification = (title: string, message: string, type: 'success' | 'warning' | 'info') => {
+  const showToastNotification = (title: string, message: string, type: 'success' | 'warning' | 'info', agentIndex?: number) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setActiveToast({ title, message, type });
+    
+    // Save to past alert history center
+    const id = "notif_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    setNotifications(prev => [
+      {
+        id,
+        title,
+        message,
+        type,
+        timestamp: new Date().toISOString(),
+        read: false,
+        agentIndex
+      },
+      ...prev
+    ]);
+
     toastTimeoutRef.current = setTimeout(() => {
       setActiveToast(null);
     }, 4500);
@@ -393,7 +440,12 @@ export default function App() {
 
   // Generate simple random hash
   const generateHash = () => {
-    return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    const chars = "abcdef0123456789";
+    let hash = "";
+    for (let i = 0; i < 64; i++) {
+      hash += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return hash;
   };
 
   // Add memory handler
@@ -428,7 +480,8 @@ export default function App() {
           showToastNotification(
             "Reputation Critical Alert",
             `Warning: Idle Agent ${a.name} (Ring #${a.index}) reputation has dropped below 50.0% (${a.reputationScore.toFixed(1)}%). Consider a ring rotation to restore cognitive focus!`,
-            "warning"
+            "warning",
+            a.index
           );
         }
       }
@@ -1465,6 +1518,24 @@ export default function App() {
                 <Activity className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="hidden md:inline">Laptop Parity</span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('alerts')}
+                className={`w-full flex items-center justify-center md:justify-start gap-2.5 h-9 px-2.5 rounded-xl text-[11px] font-semibold font-mono tracking-wide transition-all relative ${
+                  activeTab === 'alerts' 
+                    ? "bg-purple-600/10 text-purple-300 border border-purple-500/20" 
+                    : "text-slate-500 hover:text-slate-300 hover:bg-slate-900/20 border border-transparent"
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="hidden md:inline">Alert Center</span>
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-1.5 right-2 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                )}
+              </button>
             </nav>
           </div>
 
@@ -1534,6 +1605,8 @@ export default function App() {
                       agents={agents}
                       bloomThreshold={bloomThreshold}
                       bloomIntensity={bloomIntensity}
+                      bloomEnabled={bloomEnabled}
+                      setBloomEnabled={setBloomEnabled}
                       auditLogs={auditLogs}
                       telemetryData={telemetryData}
                       sendingChat={sendingChat}
@@ -1731,8 +1804,6 @@ export default function App() {
                       <button
                         type="button"
                         onClick={handleTriggerSpeech}
-                        aria-label={isListeningMic ? "Stop listening" : "Start voice input"}
-                        title={isListeningMic ? "Stop listening" : "Start voice input"}
                         className={`absolute right-1.5 top-1.5 w-7 h-7 rounded-lg border flex items-center justify-center transition-all ${
                           isListeningMic 
                             ? "bg-orange-500/20 border-orange-500/40 text-orange-400 animate-pulse" 
@@ -1746,8 +1817,6 @@ export default function App() {
                     <button
                       type="submit"
                       disabled={!chatInput.trim() || sendingChat}
-                      aria-label="Send message"
-                      title={!chatInput.trim() ? "Enter a message to send" : sendingChat ? "Sending..." : "Send message"}
                       className="w-10 h-10 bg-purple-600 hover:bg-purple-500 text-white rounded-xl flex items-center justify-center transition disabled:opacity-50 disabled:hover:bg-purple-600"
                     >
                       <Send className="w-4 h-4" />
@@ -1917,7 +1986,210 @@ export default function App() {
               setBloomThreshold={setBloomThreshold}
               bloomIntensity={bloomIntensity}
               setBloomIntensity={setBloomIntensity}
+              bloomEnabled={bloomEnabled}
+              setBloomEnabled={setBloomEnabled}
             />
+          )}
+
+          {/* Secure Alert Center Tab Panel */}
+          {activeTab === 'alerts' && (
+            <div className="space-y-6 animate-fadeIn pb-10">
+              {/* Header card with quick actions */}
+              <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                      <Bell className="w-5 h-5 text-purple-400 animate-pulse" />
+                      COGNITIVE SENATE ALERT CENTER
+                    </h2>
+                    <p className="text-xs text-slate-400 font-mono mt-1">
+                      Historical log registries of reputation drops, neural synchronization states, and system boundaries.
+                    </p>
+                  </div>
+                  <div className="flex gap-2.5">
+                    <button
+                      onClick={() => {
+                        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                        showToastNotification("ALL ALERTS DISMISSED", "Cleaned focus indicator across the entire system matrix.", "success");
+                      }}
+                      className="h-9 px-4 rounded-xl border border-purple-500/30 bg-purple-950/15 text-purple-300 font-mono text-[11px] font-semibold tracking-wide hover:bg-purple-600/10 transition-all cursor-pointer flex items-center gap-2 uppercase"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Dismiss All
+                    </button>
+                    <button
+                      onClick={() => {
+                        setNotifications([]);
+                        showToastNotification("HISTORY CLEAR COMPLETE", "Sovereign alert history registry was compressed and flushed.", "info");
+                      }}
+                      className="h-9 px-4 rounded-xl border border-slate-805 bg-slate-900/60 hover:border-red-500/35 hover:bg-red-950/10 text-slate-400 hover:text-red-400 font-mono text-[11px] font-semibold tracking-wide transition-all cursor-pointer flex items-center gap-2 uppercase"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Clear History
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cognitive Wear warning summary */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 border-t border-slate-900/60 pt-6">
+                  <div className="bg-slate-950/40 border border-slate-900 p-4 rounded-xl flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[20px] font-bold text-slate-100 font-mono leading-none">
+                        {agents.filter(a => a.reputationScore < 50.0).length}
+                      </div>
+                      <div className="text-[9px] text-slate-505 font-mono uppercase tracking-wider mt-1.5Block">
+                        Active Stagnation Points
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/40 border border-slate-900 p-4 rounded-xl flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[20px] font-bold text-slate-100 font-mono leading-none">
+                        {notifications.length}
+                      </div>
+                      <div className="text-[9px] text-slate-505 font-mono uppercase tracking-wider mt-1.5Block">
+                        Total Historical Alerts
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/40 border border-slate-900 p-4 rounded-xl flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[20px] font-bold text-slate-100 font-mono leading-none">
+                        {notifications.filter(n => !n.read).length}
+                      </div>
+                      <div className="text-[9px] text-slate-505 font-mono uppercase tracking-wider mt-1.5Block">
+                        Unread Alert Registry
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Alerts List main pane */}
+              <div className="bg-slate-900/10 border border-slate-900 rounded-2xl p-6">
+                <div className="text-[10px] text-slate-500 font-mono font-bold uppercase mb-4 tracking-widest flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-purple-500/70" />
+                  Sovereign Alert Logs
+                </div>
+
+                {notifications.length === 0 ? (
+                  <div className="p-12 text-center rounded-2xl border border-dashed border-slate-805 bg-slate-950/10 space-y-2">
+                    <Bell className="w-8 h-8 text-slate-700 mx-auto animate-pulse" />
+                    <h3 className="text-xs font-bold text-slate-400">ALERT REGISTRY SECULATED</h3>
+                    <p className="text-[10px] text-slate-500 max-w-sm mx-auto font-mono">
+                      All systems are holding standard parity indexes. No cognitive stagnation flags detected.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {notifications.map(n => {
+                      const associatedAgent = n.agentIndex !== undefined ? agents[n.agentIndex] : null;
+                      return (
+                        <div
+                          key={n.id}
+                          className={`p-4 rounded-xl border transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                            !n.read 
+                              ? "bg-slate-900/65 border-purple-500/25 shadow-md shadow-purple-950/10" 
+                              : "bg-slate-950/20 border-slate-900 text-slate-400 opacity-75"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-lg shrink-0 border mt-0.5 ${
+                              n.type === 'success' 
+                                ? "bg-emerald-950/40 border-emerald-500/20 text-emerald-400" 
+                                : n.type === 'warning' 
+                                  ? "bg-orange-950/40 border-orange-500/20 text-orange-400" 
+                                  : "bg-purple-950/40 border-purple-500/20 text-purple-300"
+                            }`}>
+                              {n.type === 'success' ? (
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              ) : n.type === 'warning' ? (
+                                <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
+                              ) : (
+                                <Bell className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap text-left">
+                                <span className={`text-xs font-bold ${!n.read ? "text-slate-200" : "text-slate-400"}`}>
+                                  {n.title}
+                                </span>
+                                {associatedAgent && (
+                                  <span 
+                                    className="text-[8px] px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wide border bg-purple-950/30 border-purple-500/30 text-purple-300"
+                                  >
+                                    Agent {associatedAgent.name}
+                                  </span>
+                                )}
+                                {!n.read && (
+                                  <span className="text-[7px] bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-wider">
+                                    UNREAD
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400 leading-relaxed font-mono text-left">
+                                {n.message}
+                              </p>
+                              <div className="text-[8px] text-slate-500 font-mono text-left">
+                                UTC TIMESTAMP: {new Date(n.timestamp).toLocaleTimeString()} — {new Date(n.timestamp).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 self-end md:self-center">
+                            {associatedAgent && (
+                              <button
+                                onClick={() => {
+                                  // Switch active agent focus
+                                  handleSelectRing(associatedAgent.index);
+                                  // Mark as read
+                                  setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                                  // Re-focus on presence view to see signature live
+                                  setActiveTab('presence');
+                                  showToastNotification(
+                                    "ROTATION SUCCESSFUL", 
+                                    `Neural link focus shifted to ${associatedAgent.name}. Synced memory registers correctly!`, 
+                                    "success"
+                                  );
+                                }}
+                                className="h-8 px-3 rounded-lg bg-purple-600/15 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-500 text-[10px] font-semibold font-mono tracking-wide transition-all cursor-pointer flex items-center gap-1.5 uppercase"
+                                title="Instantly shift cognitive senate focus here"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Rotate Focus
+                              </button>
+                            )}
+
+                            {!n.read && (
+                              <button
+                                onClick={() => {
+                                  setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                                }}
+                                className="h-8 px-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 text-[10px] font-semibold font-mono tracking-wide transition-all cursor-pointer uppercase"
+                              >
+                                Dismiss
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
         </main>
@@ -2016,33 +2288,48 @@ export default function App() {
 
       {/* High-Fidelity Floating Toast Alert */}
       {activeToast && (
-        <div className="fixed bottom-6 right-6 z-[99999] w-80 p-4 rounded-3xl bg-slate-950/90 border border-slate-800/80 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.8)] backdrop-blur-md animate-fadeIn flex gap-3 transition-all duration-300">
-          <div className={`p-2 rounded-xl shrink-0 flex items-center justify-center h-8 w-8 border ${
-            activeToast.type === 'success' 
-              ? "bg-emerald-950/50 border-emerald-500/30 text-emerald-400" 
-              : activeToast.type === 'warning' 
-                ? "bg-orange-950/50 border-orange-500/30 text-orange-400" 
-                : "bg-purple-950/50 border-purple-500/30 text-purple-300"
-          }`}>
-            {activeToast.type === 'success' ? (
-              <ShieldCheck className="w-4 h-4" />
-            ) : activeToast.type === 'warning' ? (
-              <ShieldAlert className="w-4 h-4 animate-pulse" />
-            ) : (
-              <Terminal className="w-4 h-4" />
-            )}
+        <div className="fixed bottom-6 right-6 z-[99999] w-80 p-4 rounded-3xl bg-slate-950/90 border border-slate-800/80 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.8)] backdrop-blur-md animate-fadeIn flex flex-col gap-2 transition-all duration-300">
+          <div className="flex gap-3">
+            <div className={`p-2 rounded-xl shrink-0 flex items-center justify-center h-8 w-8 border ${
+              activeToast.type === 'success' 
+                ? "bg-emerald-950/50 border-emerald-500/30 text-emerald-400" 
+                : activeToast.type === 'warning' 
+                  ? "bg-orange-950/50 border-orange-500/30 text-orange-400" 
+                  : "bg-purple-950/50 border-purple-500/30 text-purple-300"
+            }`}>
+              {activeToast.type === 'success' ? (
+                <ShieldCheck className="w-4 h-4" />
+              ) : activeToast.type === 'warning' ? (
+                <ShieldAlert className="w-4 h-4 animate-pulse" />
+              ) : (
+                <Terminal className="w-4 h-4" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-bold tracking-wide block font-sans text-slate-150">{activeToast.title}</span>
+              <p className="text-[10px] text-slate-400 leading-normal mt-1 font-mono">{activeToast.message}</p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setActiveToast(null)}
+              className="text-slate-500 hover:text-slate-100 text-xs self-start p-1 cursor-pointer"
+            >
+              ✕
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-xs font-bold tracking-wide block font-sans text-slate-150">{activeToast.title}</span>
-            <p className="text-[10px] text-slate-400 leading-normal mt-1 font-mono">{activeToast.message}</p>
+          
+          <div className="flex justify-end gap-2 border-t border-slate-900/40 pt-1.5 mt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveToast(null);
+                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+              }}
+              className="text-[9px] font-mono tracking-wider text-purple-400 hover:text-purple-300 bg-purple-950/25 hover:bg-purple-955/40 border border-purple-500/20 hover:border-purple-500/45 px-2.5 py-1 rounded-lg cursor-pointer transition-all uppercase"
+            >
+              Dismiss All
+            </button>
           </div>
-          <button 
-            type="button"
-            onClick={() => setActiveToast(null)}
-            className="text-slate-500 hover:text-slate-100 text-xs self-start p-1 cursor-pointer"
-          >
-            ✕
-          </button>
         </div>
       )}
     </div>
