@@ -1,0 +1,3 @@
+## 2024-05-24 - Accessible Icon Buttons and Async Feedback
+**Learning:** Found that core interactive elements like the chat submit and microphone buttons were missing basic accessibility contexts (`aria-label`, `title`) and keyboard navigation support (`focus-visible:ring`). In addition, the submit button lacked visual feedback for its async state (`sendingChat`), leading to poor interaction confidence.
+**Action:** Always wrap icon-only interactive controls with `aria-label` and `title`, apply `focus-visible:ring-2 focus-visible:ring-purple-500 outline-none` to guarantee keyboard accessibility, and ensure async actions have clear visual feedback (like replacing the icon with a spinner).
