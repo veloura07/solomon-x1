@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent, useMemo } from "react";
+import { useState, useEffect, useRef, FormEvent, useMemo, ChangeEvent } from "react";
 import gsap from "gsap";
 import { Message, MemoryItem, AuditLog, AgentSpec, TelemetryPoint } from "./types";
 import ThreeCanvas from "./components/ThreeCanvas";
@@ -32,6 +32,8 @@ import {
   Search,
   Command,
   RefreshCw,
+  Download,
+  Upload,
   Sliders,
   Bell,
   Trash2
@@ -210,6 +212,33 @@ const STORAGE_KEYS = {
   notifications: "solomonx.notifications",
 } as const;
 
+type SolomonSystemSnapshot = {
+  schemaVersion: string;
+  exportedAt: string;
+  activeTab: 'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin' | 'alerts';
+  selectedRingIndex: number;
+  rotationLocked: boolean;
+  bloomThreshold: number;
+  bloomIntensity: number;
+  bloomEnabled: boolean;
+  doubtSensitivityActive: boolean;
+  epistemicSkepticism: number;
+  agents: AgentSpec[];
+  messages: Message[];
+  memoryItems: MemoryItem[];
+  auditLogs: AuditLog[];
+  telemetryData: TelemetryPoint[];
+  notifications: Array<{
+    id: string;
+    title: string;
+    message: string;
+    type: 'success' | 'warning' | 'info';
+    timestamp: string;
+    read: boolean;
+    agentIndex?: number;
+  }>;
+};
+
 function readStoredState<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
 
@@ -222,6 +251,24 @@ function readStoredState<T>(key: string, fallback: T): T {
   }
 }
 
+    {
+      label: "Export Full System Snapshot",
+      category: "Maintenance",
+      description: "Download the full Solomon state bundle for backup or migration",
+      action: () => exportSystemSnapshot()
+    },
+    {
+      label: "Import Full System Snapshot",
+      category: "Maintenance",
+      description: "Restore agents, memory, audits, telemetry, and alerts from a snapshot file",
+      action: () => snapshotImportInputRef.current?.click()
+    },
+    {
+      label: "Reset Solomon Baseline",
+      category: "Maintenance",
+      description: "Clear session state and rehydrate the original Solomon baseline",
+      action: () => resetSystemState()
+    },
 function writeStoredState(key: string, value: unknown) {
   if (typeof window === "undefined") return;
 
@@ -230,6 +277,16 @@ function writeStoredState(key: string, value: unknown) {
   } catch {
     // Keep the app usable even if storage is unavailable.
   }
+}
+
+function downloadJson(filename: string, payload: unknown) {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+  const downloadAnchor = document.createElement("a");
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", filename);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
 }
 
 export default function App() {
@@ -266,6 +323,7 @@ export default function App() {
       read: false
     }
   ]));
+  const snapshotImportInputRef = useRef<HTMLInputElement | null>(null);
   
   const handleSelectRing = (idx: number) => {
     if (idx === selectedRingIndex) return;
@@ -454,6 +512,188 @@ export default function App() {
   useEffect(() => {
     writeStoredState(STORAGE_KEYS.notifications, notifications);
   }, [notifications]);
+
+  const exportSystemSnapshot = () => {
+    const snapshot: SolomonSystemSnapshot = {
+      schemaVersion: "1.0.0",
+      exportedAt: new Date().toISOString(),
+      activeTab,
+      selectedRingIndex,
+      rotationLocked,
+      bloomThreshold,
+      bloomIntensity,
+      bloomEnabled,
+      doubtSensitivityActive,
+      epistemicSkepticism,
+      agents,
+      messages,
+      memoryItems,
+      auditLogs,
+      telemetryData,
+      notifications,
+    };
+
+    downloadJson(`solomonx_snapshot_${new Date().toISOString().slice(0, 10)}.json`, snapshot);
+    handleAddAuditLog({
+      actor: "TrustOS Enclave",
+      action: "EXPORT_SYSTEM_SNAPSHOT",
+      status: "AUTHORIZED",
+      details: "Whole-system cognitive snapshot exported for backup or migration."
+    });
+    showToastNotification("SYSTEM SNAPSHOT EXPORTED", "Captured agents, memory, telemetry, alerts, and state into a single archive.", "success");
+  };
+
+  const importSystemSnapshot = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as Partial<SolomonSystemSnapshot>;
+
+      if (!parsed || !Array.isArray(parsed.agents) || !Array.isArray(parsed.messages) || !Array.isArray(parsed.memoryItems) || !Array.isArray(parsed.auditLogs) || !Array.isArray(parsed.telemetryData) || !Array.isArray(parsed.notifications)) {
+        throw new Error("Snapshot missing required Solomon system arrays.");
+      }
+
+      if (typeof parsed.selectedRingIndex === "number") setSelectedRingIndex(parsed.selectedRingIndex);
+      if (typeof parsed.activeTab === "string") setActiveTab(parsed.activeTab as any);
+      if (typeof parsed.rotationLocked === "boolean") setRotationLocked(parsed.rotationLocked);
+      if (typeof parsed.bloomThreshold === "number") setBloomThreshold(parsed.bloomThreshold);
+      if (typeof parsed.bloomIntensity === "number") setBloomIntensity(parsed.bloomIntensity);
+      if (typeof parsed.bloomEnabled === "boolean") setBloomEnabled(parsed.bloomEnabled);
+      if (typeof parsed.doubtSensitivityActive === "boolean") setDoubtSensitivityActive(parsed.doubtSensitivityActive);
+      if (typeof parsed.epistemicSkepticism === "number") setEpistemicSkepticism(parsed.epistemicSkepticism);
+
+      setAgents(parsed.agents as AgentSpec[]);
+      setMessages(parsed.messages as Message[]);
+      setMemoryItems(parsed.memoryItems as MemoryItem[]);
+      setAuditLogs(parsed.auditLogs as AuditLog[]);
+      setTelemetryData(parsed.telemetryData as TelemetryPoint[]);
+      setNotifications(parsed.notifications as typeof notifications);
+
+      handleAddAuditLog({
+        actor: "TrustOS Enclave",
+        action: "IMPORT_SYSTEM_SNAPSHOT",
+        status: "AUTHORIZED",
+        details: `Whole-system snapshot restored from ${file.name}.`
+      });
+      showToastNotification("SYSTEM SNAPSHOT RESTORED", "Imported a full Solomon state archive and rehydrated the current session.", "success");
+    } catch (error: any) {
+      showToastNotification("SNAPSHOT IMPORT FAILED", error?.message || "The selected file could not be restored.", "warning");
+    }
+  };
+
+  const resetSystemState = () => {
+    setActiveTab('presence');
+    setSelectedRingIndex(9);
+    setRotationLocked(false);
+    setBloomThreshold(0.22);
+    setBloomIntensity(1.5);
+    setBloomEnabled(true);
+    setDoubtSensitivityActive(true);
+    setEpistemicSkepticism(65);
+    setAgents(INITIAL_AGENTS);
+    setMessages([
+      {
+        id: "init_1",
+        role: "assistant",
+        content: "Solomon X Initialized. Secure biometric handshakes unsealed correctly. Ready to coordinate specialized agent congregation.",
+        timestamp: new Date().toISOString(),
+        confidenceScore: 0.99,
+        doubtAnalysis: "Bootloader signature verified against hardware TPM seed-hash register.",
+        agentName: "Ars Regalis"
+      }
+    ]);
+    setMemoryItems([
+      {
+        id: "mem_1",
+        horizon: "L1_Sensory",
+        summary: "Diffie-Hellman Key rotational sequence committed.",
+        detailedContent: "Secure key exchange unsealed boot matrix registry with 0 error logs.",
+        category: "Invariants",
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        tags: ["trustos", "dh", "handshake"]
+      },
+      {
+        id: "mem_2",
+        horizon: "L2_Conversational",
+        summary: "Handled secure prompt regarding system configurations.",
+        detailedContent: "Ensured raw credentials did not cross OS boundaries into open networks.",
+        category: "Information",
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        tags: ["prompt", "enclave"]
+      },
+      {
+        id: "mem_3",
+        horizon: "L3_Episodic",
+        summary: "Cognitive task sequence: coding -> debugging committed.",
+        detailedContent: "Logged pattern of active sequence into DuckDB temporal log fields.",
+        category: "Telemetry",
+        timestamp: new Date(Date.now() - 500000).toISOString(),
+        tags: ["cognitive_twin", "telemetry"]
+      }
+    ]);
+    setAuditLogs([
+      {
+        id: "audit_1",
+        timestamp: new Date(Date.now() - 7200000).toISOString(),
+        actor: "TrustOS Enclave",
+        action: "BOOTLOAD_SYSTEM_INTEGRITY",
+        status: "AUTHORIZED",
+        cryptographicHash: "3f8ec2de2434bcf12937afecd92bcde724398bcdaea7aefcde928bc7e6a5bb1a",
+        details: "TPM-sealed registers successfully validated against signed master key."
+      },
+      {
+        id: "audit_2",
+        timestamp: new Date().toISOString(),
+        actor: "Sovereignty Gate",
+        action: "BOOTSTRAP_ENCLAVE",
+        status: "AUTHORIZED",
+        cryptographicHash: "90caedec7c48fde9a02bc8efda90bcde72c43bcdae34fdcc8902bcaeaefcde09",
+        details: "Handshake completed representing clean launch of cognitive presence."
+      }
+    ]);
+    setTelemetryData([
+      { timeIndex: 0, timeString: "45m ago", focusLevel: 80, cognitiveLoad: 40, momentum: 70, geminiLatency: 1200 },
+      { timeIndex: 1, timeString: "40m ago", focusLevel: 82, cognitiveLoad: 35, momentum: 72, geminiLatency: 1100 },
+      { timeIndex: 2, timeString: "35m ago", focusLevel: 85, cognitiveLoad: 38, momentum: 75, geminiLatency: 1150 },
+      { timeIndex: 3, timeString: "30m ago", focusLevel: 83, cognitiveLoad: 48, momentum: 74, geminiLatency: 1550 },
+      { timeIndex: 4, timeString: "25m ago", focusLevel: 78, cognitiveLoad: 50, momentum: 70, geminiLatency: 1800 },
+      { timeIndex: 5, timeString: "20m ago", focusLevel: 88, cognitiveLoad: 42, momentum: 78, geminiLatency: 1350 },
+      { timeIndex: 6, timeString: "15m ago", focusLevel: 92, cognitiveLoad: 32, momentum: 84, geminiLatency: 1050 },
+      { timeIndex: 7, timeString: "10m ago", focusLevel: 90, cognitiveLoad: 35, momentum: 89, geminiLatency: 1100 },
+      { timeIndex: 8, timeString: "5m ago", focusLevel: 86, cognitiveLoad: 44, momentum: 87, geminiLatency: 1450 },
+      { timeIndex: 9, timeString: "Just now", focusLevel: 88, cognitiveLoad: 40, momentum: 90, geminiLatency: 1300 },
+    ]);
+    setNotifications([
+      {
+        id: "notif_init_1",
+        title: "Solomon-X OS Boot Alert",
+        message: "Decentralized cognitive senate unsealed successfully. Secure L0-L3 memory registers validated.",
+        type: "success",
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        read: true
+      },
+      {
+        id: "notif_init_2",
+        title: "Advisory: Cognitive Wear-and-Tear",
+        message: "Notice: Cognitive rot decay simulation is operational. Idle agent indexes will lose fractional reputation. Shifting focused ring rotation highly recommended.",
+        type: "info",
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        read: false
+      }
+    ]);
+
+    Object.values(STORAGE_KEYS).forEach(key => window.localStorage.removeItem(key));
+    handleAddAuditLog({
+      actor: "TrustOS Enclave",
+      action: "RESET_SYSTEM_STATE",
+      status: "AUTHORIZED",
+      details: "All session state returned to Solomon baseline defaults."
+    });
+    showToastNotification("SYSTEM RESET COMPLETE", "Restored the Solomon baseline state across agents, memory, telemetry, and alerts.", "info");
+  };
 
   // Subtle CSS-transition manager using GSAP-based color tweens to smoothly interpolate CSS variables
   const currentTweenColors = useRef({
@@ -1061,6 +1301,12 @@ export default function App() {
     });
   };
 
+  const handleOpenCommandPalette = () => {
+    setCommandSearchQuery("");
+    setCommandSelectedIndex(0);
+    setIsCommandModalOpen(true);
+  };
+
   // Add telemetry handler
   const handleUpdateTelemetry = (newData: TelemetryPoint[]) => {
     setTelemetryData(newData);
@@ -1364,6 +1610,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-purple-500/30 selection:text-white">
+      <input
+        ref={snapshotImportInputRef}
+        type="file"
+        accept="application/json"
+        onChange={importSystemSnapshot}
+        className="hidden"
+      />
       
       {/* GLOBAL HUD HEADER */}
       <header className="h-16 flex-shrink-0 bg-slate-950 border-b border-slate-900/80 px-6 flex items-center justify-between relative z-10">
@@ -1377,6 +1630,33 @@ export default function App() {
 
         {/* Global Node Status Trackers */}
         <div id="header-telemetry" className="flex items-center gap-4 text-[10px] font-mono text-slate-400">
+          <button
+            type="button"
+            onClick={handleOpenCommandPalette}
+            className="hidden md:flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full hover:border-purple-500/30 hover:text-slate-200 transition"
+            title="Open command palette"
+          >
+            <Command className="w-3.5 h-3.5 text-purple-400" />
+            <span>COMMANDS</span>
+          </button>
+          <button
+            type="button"
+            onClick={exportSystemSnapshot}
+            className="hidden lg:flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full hover:border-emerald-500/30 hover:text-slate-200 transition"
+            title="Export full system snapshot"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span>EXPORT</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => snapshotImportInputRef.current?.click()}
+            className="hidden lg:flex items-center gap-1.5 bg-slate-900/60 border border-slate-800/80 px-3 h-8 rounded-full hover:border-cyan-500/30 hover:text-slate-200 transition"
+            title="Import full system snapshot"
+          >
+            <Upload className="w-3.5 h-3.5 text-cyan-400" />
+            <span>IMPORT</span>
+          </button>
           {wsStatus === 'connected' ? (
             <div className="hidden lg:flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 px-3 h-8 rounded-full animate-fadeIn">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
