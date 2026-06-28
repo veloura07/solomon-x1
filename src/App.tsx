@@ -200,12 +200,44 @@ const INITIAL_AGENTS: AgentSpec[] = [
   }
 ];
 
+const STORAGE_KEYS = {
+  selectedRingIndex: "solomonx.selectedRingIndex",
+  agents: "solomonx.agents",
+  messages: "solomonx.messages",
+  memoryItems: "solomonx.memoryItems",
+  auditLogs: "solomonx.auditLogs",
+  telemetryData: "solomonx.telemetryData",
+  notifications: "solomonx.notifications",
+} as const;
+
+function readStoredState<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredState(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Keep the app usable even if storage is unavailable.
+  }
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin' | 'alerts'>('presence');
-  const [selectedRingIndex, setSelectedRingIndex] = useState(9); // Ars Regalis active by default
+  const [selectedRingIndex, setSelectedRingIndex] = useState<number>(() => readStoredState(STORAGE_KEYS.selectedRingIndex, 9)); // Ars Regalis active by default
   const [rotationLocked, setRotationLocked] = useState(false);
   const [isCinematicFading, setIsCinematicFading] = useState(false);
-  const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
+  const [agents, setAgents] = useState<AgentSpec[]>(() => readStoredState(STORAGE_KEYS.agents, INITIAL_AGENTS));
   
   // Persistent notification history registry
   const [notifications, setNotifications] = useState<{
@@ -216,7 +248,7 @@ export default function App() {
     timestamp: string;
     read: boolean;
     agentIndex?: number;
-  }[]>([
+  }[]>(() => readStoredState(STORAGE_KEYS.notifications, [
     {
       id: "notif_init_1",
       title: "Solomon-X OS Boot Alert",
@@ -233,7 +265,7 @@ export default function App() {
       timestamp: new Date(Date.now() - 1800000).toISOString(),
       read: false
     }
-  ]);
+  ]));
   
   const handleSelectRing = (idx: number) => {
     if (idx === selectedRingIndex) return;
@@ -304,7 +336,7 @@ export default function App() {
   };
   
   // 1. Chat States
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>(() => readStoredState(STORAGE_KEYS.messages, [
     {
       id: "init_1",
       role: "assistant",
@@ -314,7 +346,7 @@ export default function App() {
       doubtAnalysis: "Bootloader signature verified against hardware TPM seed-hash register.",
       agentName: "Ars Regalis"
     }
-  ]);
+  ]));
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [chatError, setChatError] = useState("");
@@ -326,7 +358,7 @@ export default function App() {
   const [epistemicSkepticism, setEpistemicSkepticism] = useState(65);
 
   // 2. MemoryOS States
-  const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([
+  const [memoryItems, setMemoryItems] = useState<MemoryItem[]>(() => readStoredState(STORAGE_KEYS.memoryItems, [
     {
       id: "mem_1",
       horizon: "L1_Sensory",
@@ -354,10 +386,10 @@ export default function App() {
       timestamp: new Date(Date.now() - 500000).toISOString(),
       tags: ["cognitive_twin", "telemetry"]
     }
-  ]);
+  ]));
 
   // 3. TrustOS Audits
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => readStoredState(STORAGE_KEYS.auditLogs, [
     {
       id: "audit_1",
       timestamp: new Date(Date.now() - 7200000).toISOString(),
@@ -376,10 +408,10 @@ export default function App() {
       cryptographicHash: "90caedec7c48fde9a02bc8efda90bcde72c43bcdae34fdcc8902bcaeaefcde09",
       details: "Handshake completed representing clean launch of cognitive presence."
     }
-  ]);
+  ]));
 
   // 4. Cognitive Twin Telemetries
-  const [telemetryData, setTelemetryData] = useState<TelemetryPoint[]>([
+  const [telemetryData, setTelemetryData] = useState<TelemetryPoint[]>(() => readStoredState(STORAGE_KEYS.telemetryData, [
     { timeIndex: 0, timeString: "45m ago", focusLevel: 80, cognitiveLoad: 40, momentum: 70, geminiLatency: 1200 },
     { timeIndex: 1, timeString: "40m ago", focusLevel: 82, cognitiveLoad: 35, momentum: 72, geminiLatency: 1100 },
     { timeIndex: 2, timeString: "35m ago", focusLevel: 85, cognitiveLoad: 38, momentum: 75, geminiLatency: 1150 },
@@ -390,10 +422,38 @@ export default function App() {
     { timeIndex: 7, timeString: "10m ago", focusLevel: 90, cognitiveLoad: 35, momentum: 89, geminiLatency: 1100 },
     { timeIndex: 8, timeString: "5m ago", focusLevel: 86, cognitiveLoad: 44, momentum: 87, geminiLatency: 1450 },
     { timeIndex: 9, timeString: "Just now", focusLevel: 88, cognitiveLoad: 40, momentum: 90, geminiLatency: 1300 },
-  ]);
+  ]));
 
   const activeAgent = selectedRingIndex !== -1 ? agents[selectedRingIndex] : null;
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.selectedRingIndex, selectedRingIndex);
+  }, [selectedRingIndex]);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.agents, agents);
+  }, [agents]);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.messages, messages);
+  }, [messages]);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.memoryItems, memoryItems);
+  }, [memoryItems]);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.auditLogs, auditLogs);
+  }, [auditLogs]);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.telemetryData, telemetryData);
+  }, [telemetryData]);
+
+  useEffect(() => {
+    writeStoredState(STORAGE_KEYS.notifications, notifications);
+  }, [notifications]);
 
   // Subtle CSS-transition manager using GSAP-based color tweens to smoothly interpolate CSS variables
   const currentTweenColors = useRef({

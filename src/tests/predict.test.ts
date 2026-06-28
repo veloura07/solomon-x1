@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 
+const mockGenerateContent = vi.hoisted(() => vi.fn());
+
 // We mock the entire @google/genai module and create a mock class inside
 vi.mock('@google/genai', () => {
   class MockGoogleGenAI {
     models: any;
     constructor() {
       this.models = {
-        generateContent: vi.fn(),
+          generateContent: mockGenerateContent,
       };
     }
   }
@@ -20,9 +22,11 @@ describe('POST /api/predict', () => {
 
   beforeEach(async () => {
     originalEnv = { ...process.env };
+    process.env.NODE_ENV = 'test';
     process.env.GEMINI_API_KEY = 'test-api-key';
+    mockGenerateContent.mockReset();
     vi.resetModules();
-    app = (await import('../../server.js')).app;
+    app = (await import('../../server.ts')).app;
   });
 
   afterEach(() => {
@@ -42,10 +46,36 @@ describe('POST /api/predict', () => {
     expect(res.body.error).toBe("Invalid timeline format. Expects array of events/context tags.");
   });
 
+  it('should return health status', async () => {
+    const res = await request(app).get('/api/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('online');
+  });
+
+  it('should return chat responses successfully', async () => {
+    const mockResponse = {
+      text: 'Hello from Solomon X',
+      confidenceScore: 0.91,
+      doubtAnalysis: 'Minimal doubt detected.'
+    };
+
+    mockGenerateContent.mockResolvedValueOnce({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const res = await request(app).post('/api/chat').send({
+      messages: [{ role: 'user', content: 'Say hello' }],
+      systemInstruction: 'Be concise.'
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(mockResponse);
+  });
+
   it('should return 500 if GEMINI_API_KEY is not configured', async () => {
     process.env.GEMINI_API_KEY = '';
     vi.resetModules();
-    app = (await import('../../server.js')).app;
+    app = (await import('../../server.ts')).app;
     const res = await request(app).post('/api/predict').send({ timeline: ['event1', 'event2'] });
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("GEMINI_API_KEY not configured.");
@@ -59,23 +89,12 @@ describe('POST /api/predict', () => {
       recommendedPreparation: "Take a break"
     };
 
-    const mockGenerateContent = vi.fn().mockResolvedValue({
+    mockGenerateContent.mockResolvedValueOnce({
       text: JSON.stringify(mockResponse)
     });
 
-    class MockGoogleGenAI {
-      models: any;
-      constructor() {
-        this.models = {
-          generateContent: mockGenerateContent,
-        };
-      }
-    }
-
-    vi.doMock('@google/genai', () => ({ GoogleGenAI: MockGoogleGenAI }));
-
     vi.resetModules();
-    app = (await import('../../server.js')).app;
+    app = (await import('../../server.ts')).app;
 
     const timeline = ['started working', 'got stuck on a bug'];
     const res = await request(app).post('/api/predict').send({ timeline });
