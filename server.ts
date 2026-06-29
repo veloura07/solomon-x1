@@ -208,6 +208,16 @@ app.get("/api/health", (req, res) => {
 
 // 2. API: SECURE CHAT WITH ACTIVE REPAIR ARCHETYPE (uses Gemini responseSchema)
 app.post("/api/chat", async (req, res) => {
+  const expectedToken = process.env.VITE_AUTH_TOKEN;
+  if (!expectedToken) {
+    return res.status(500).json({ error: "VITE_AUTH_TOKEN is not configured in the host environment." });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${expectedToken}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   if (!ai) {
     return res.status(500).json({
       error: "GEMINI_API_KEY is not configured in the host environment. Please add it in Settings > Secrets."
@@ -277,6 +287,16 @@ app.post("/api/chat", async (req, res) => {
 
 // 3. API: HOOD ANTICIPATORY SEQUENCE FORECAST (Translates context into predictive outcome vectors)
 app.post("/api/predict", async (req, res) => {
+  const expectedToken = process.env.VITE_AUTH_TOKEN;
+  if (!expectedToken) {
+    return res.status(500).json({ error: "VITE_AUTH_TOKEN is not configured in the host environment." });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${expectedToken}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   if (!ai) {
     return res.status(500).json({ error: "GEMINI_API_KEY not configured." });
   }

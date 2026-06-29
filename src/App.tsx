@@ -1558,7 +1558,10 @@ export default function App() {
 
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${import.meta.env.VITE_AUTH_TOKEN}`
+        },
         body: JSON.stringify({
           messages: bodyMessages,
           systemInstruction: activeInstructions
@@ -2236,7 +2239,10 @@ export default function App() {
                   // Connect to real backend so that Gemini responds under selected agent instructions!
                   const res = await fetch("/api/chat", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${import.meta.env.VITE_AUTH_TOKEN}`
+                    },
                     body: JSON.stringify({
                       messages: [
                         ...messages.map(m => ({ role: m.role, content: m.content })),
