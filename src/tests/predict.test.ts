@@ -24,6 +24,7 @@ describe('POST /api/predict', () => {
     originalEnv = { ...process.env };
     process.env.NODE_ENV = 'test';
     process.env.GEMINI_API_KEY = 'test-api-key';
+    process.env.VITE_AUTH_TOKEN = 'test-auth-token';
     mockGenerateContent.mockReset();
     vi.resetModules();
     app = (await import('../../server.ts')).app;
@@ -35,13 +36,19 @@ describe('POST /api/predict', () => {
   });
 
   it('should return 400 if timeline is missing', async () => {
-    const res = await request(app).post('/api/predict').send({});
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-auth-token')
+      .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid timeline format. Expects array of events/context tags.");
   });
 
   it('should return 400 if timeline is not an array', async () => {
-    const res = await request(app).post('/api/predict').send({ timeline: 'not an array' });
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-auth-token')
+      .send({ timeline: 'not an array' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid timeline format. Expects array of events/context tags.");
   });
@@ -63,10 +70,13 @@ describe('POST /api/predict', () => {
       text: JSON.stringify(mockResponse)
     });
 
-    const res = await request(app).post('/api/chat').send({
-      messages: [{ role: 'user', content: 'Say hello' }],
-      systemInstruction: 'Be concise.'
-    });
+    const res = await request(app)
+      .post('/api/chat')
+      .set('Authorization', 'Bearer test-auth-token')
+      .send({
+        messages: [{ role: 'user', content: 'Say hello' }],
+        systemInstruction: 'Be concise.'
+      });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(mockResponse);
@@ -76,7 +86,10 @@ describe('POST /api/predict', () => {
     process.env.GEMINI_API_KEY = '';
     vi.resetModules();
     app = (await import('../../server.ts')).app;
-    const res = await request(app).post('/api/predict').send({ timeline: ['event1', 'event2'] });
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-auth-token')
+      .send({ timeline: ['event1', 'event2'] });
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("GEMINI_API_KEY not configured.");
   });
@@ -97,7 +110,10 @@ describe('POST /api/predict', () => {
     app = (await import('../../server.ts')).app;
 
     const timeline = ['started working', 'got stuck on a bug'];
-    const res = await request(app).post('/api/predict').send({ timeline });
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-auth-token')
+      .send({ timeline });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(mockResponse);
