@@ -335,10 +335,10 @@ function buildLadderRungs(ringGroup, R, cols) {
   ringGroup.add(new THREE.Mesh(oRailGeo, railMat.clone()));
 
   const rungLen = outerR - innerR;
+  const midR    = (innerR + outerR) / 2;
+  const rungGeo = new THREE.CylinderGeometry(0.2, 0.2, rungLen, 5);
   for (let i = 0; i < N; i++) {
     const angle  = (i / N) * Math.PI * 2;
-    const midR   = (innerR + outerR) / 2;
-    const rungGeo = new THREE.CylinderGeometry(0.2, 0.2, rungLen, 5);
     const rung    = new THREE.Mesh(rungGeo, rungMat);
     placeOnBand(rung, angle, midR);
     ringGroup.add(rung);
