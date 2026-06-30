@@ -293,11 +293,12 @@ function buildCrystalFacets(ringGroup, R, cols) {
     0.7, 0.5
   );
 
+  const cGeo = new THREE.OctahedronGeometry(1.7, 0);
+
   for (let i = 0; i < N; i++) {
     const angle     = (i / N) * Math.PI * 2;
     const nextAngle = ((i + 1) / N) * Math.PI * 2;
 
-    const cGeo    = new THREE.OctahedronGeometry(1.7, 0);
     const crystal = new THREE.Mesh(cGeo, crystalMat);
     crystal.position.set(
       Math.cos(angle) * R,
