@@ -200,8 +200,6 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
 app.get("/api/health", (req, res) => {
   res.json({
     status: "online",
-    hasApiKey: !!apiKey,
-    platform: "Solomon X Cognitive Node v1.4.0",
     localTime: new Date().toISOString()
   });
 });

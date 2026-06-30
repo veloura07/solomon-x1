@@ -17,12 +17,10 @@ import {
   Terminal, 
   Mic, 
   Send, 
-  Sparkles, 
   ShieldCheck, 
   Layers, 
   Cpu, 
   Coins, 
-  Flame,
   Volume2,
   Lock,
   Unlock,
@@ -250,24 +248,6 @@ function readStoredState<T>(key: string, fallback: T): T {
   }
 }
 
-    {
-      label: "Export Full System Snapshot",
-      category: "Maintenance",
-      description: "Download the full Solomon state bundle for backup or migration",
-      action: () => exportSystemSnapshot()
-    },
-    {
-      label: "Import Full System Snapshot",
-      category: "Maintenance",
-      description: "Restore agents, memory, audits, telemetry, and alerts from a snapshot file",
-      action: () => snapshotImportInputRef.current?.click()
-    },
-    {
-      label: "Reset Solomon Baseline",
-      category: "Maintenance",
-      description: "Clear session state and rehydrate the original Solomon baseline",
-      action: () => resetSystemState()
-    },
 function writeStoredState(key: string, value: unknown) {
   if (typeof window === "undefined") return;
 
@@ -1020,6 +1000,24 @@ export default function App() {
           return prev;
         });
       }
+    },
+    {
+      label: "Export Full System Snapshot",
+      category: "Maintenance",
+      description: "Download the full Solomon state bundle for backup or migration",
+      action: () => exportSystemSnapshot()
+    },
+    {
+      label: "Import Full System Snapshot",
+      category: "Maintenance",
+      description: "Restore agents, memory, audits, telemetry, and alerts from a snapshot file",
+      action: () => snapshotImportInputRef.current?.click()
+    },
+    {
+      label: "Reset Solomon Baseline",
+      category: "Maintenance",
+      description: "Clear session state and rehydrate the original Solomon baseline",
+      action: () => resetSystemState()
     },
     ...agents.map(ag => ({
       label: `Align Connection to: ${ag.name}`,
