@@ -25,7 +25,7 @@ Protocol (outbound events sent to the frontend)
 """
 
 import json
-import sys
+import logging
 from typing import Any
 
 from backend import config
@@ -94,7 +94,7 @@ async def handle_message(
 
     except Exception as exc:
         # Top-level safety net — never let a handler crash the server
-        print(f"[ws_handlers] Unhandled exception in event '{event}': {exc}", file=sys.stderr)
+        logging.error(f"[ws_handlers] Unhandled exception in event '{event}': {exc}")
         try:
             await _send(websocket, {
                 "event": "error",
