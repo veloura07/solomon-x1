@@ -15,6 +15,7 @@ import {
   ShieldAlert, 
   Activity, 
   Terminal, 
+  Fingerprint,
   Mic, 
   Send, 
   ShieldCheck, 
