@@ -147,19 +147,20 @@ function buildCrossStruts(ringGroup, R, cols) {
     0.5, 0.5
   );
 
+  const strutLen = BAND_TUBE * 1.7;
+  const strutGeo = new THREE.CylinderGeometry(0.28, 0.28, strutLen, 6);
+  const braceLen = chordLength(R, N) * 0.75;
+  const braceGeo = new THREE.CylinderGeometry(0.16, 0.16, braceLen, 5);
+
   for (let i = 0; i < N; i++) {
     const angle     = (i / N) * Math.PI * 2;
     const nextAngle = ((i + 1) / N) * Math.PI * 2;
     const midAngle  = (angle + nextAngle) / 2;
 
-    const strutLen = BAND_TUBE * 1.7;
-    const strutGeo = new THREE.CylinderGeometry(0.28, 0.28, strutLen, 6);
     const strut    = new THREE.Mesh(strutGeo, strutMat);
     placeOnBand(strut, angle, R);
     ringGroup.add(strut);
 
-    const braceLen = chordLength(R, N) * 0.75;
-    const braceGeo = new THREE.CylinderGeometry(0.16, 0.16, braceLen, 5);
     const brace    = new THREE.Mesh(braceGeo, braceMat);
     brace.position.set(
       Math.cos(midAngle) * R,
@@ -184,11 +185,14 @@ function buildHexNodes(ringGroup, R, cols) {
     0.7, 0.4
   );
 
+  const nodeGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.7, 6);
+  const vLen = chordLength(R, N) * 0.4;
+  const vGeo = new THREE.CylinderGeometry(0.12, 0.12, vLen, 4);
+
   for (let i = 0; i < N; i++) {
     const angle     = (i / N) * Math.PI * 2;
     const nextAngle = ((i + 1) / N) * Math.PI * 2;
 
-    const nodeGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.7, 6);
     const node    = new THREE.Mesh(nodeGeo, nodeMat);
     placeOnBand(node, angle, R);
     node.rotateX(Math.PI / 2);
@@ -198,8 +202,6 @@ function buildHexNodes(ringGroup, R, cols) {
 
     const midAngle = (angle + nextAngle) / 2;
     [-0.3, 0.3].forEach(zOff => {
-      const vLen = chordLength(R, N) * 0.4;
-      const vGeo = new THREE.CylinderGeometry(0.12, 0.12, vLen, 4);
       const v    = new THREE.Mesh(vGeo, connMat);
       v.position.set(
         Math.cos(midAngle) * R,
@@ -225,13 +227,14 @@ function buildAngularBrackets(ringGroup, R, cols) {
     0.65, 0.4
   );
 
+  const armLen = BAND_TUBE * 1.5;
+  const armGeo = new THREE.CylinderGeometry(0.28, 0.28, armLen, 5);
+
   for (let i = 0; i < N; i++) {
     const angle     = (i / N) * Math.PI * 2;
     const nextAngle = ((i + 1) / N) * Math.PI * 2;
 
-    const armLen = BAND_TUBE * 1.5;
     [-0.6, 0.6].forEach(tilt => {
-      const armGeo = new THREE.CylinderGeometry(0.28, 0.28, armLen, 5);
       const arm    = new THREE.Mesh(armGeo, armMat);
       placeOnBand(arm, angle, R);
       arm.rotateZ(tilt);
@@ -335,10 +338,10 @@ function buildLadderRungs(ringGroup, R, cols) {
   ringGroup.add(new THREE.Mesh(oRailGeo, railMat.clone()));
 
   const rungLen = outerR - innerR;
+  const rungGeo = new THREE.CylinderGeometry(0.2, 0.2, rungLen, 5);
   for (let i = 0; i < N; i++) {
     const angle  = (i / N) * Math.PI * 2;
     const midR   = (innerR + outerR) / 2;
-    const rungGeo = new THREE.CylinderGeometry(0.2, 0.2, rungLen, 5);
     const rung    = new THREE.Mesh(rungGeo, rungMat);
     placeOnBand(rung, angle, midR);
     ringGroup.add(rung);
@@ -358,14 +361,15 @@ function buildSpiralWraps(ringGroup, R, cols) {
     0.4, 0.2
   );
 
+  const dGeo = new THREE.CylinderGeometry(
+    BAND_TUBE * 0.72, BAND_TUBE * 0.72, 0.22, 8
+  );
+
   for (let i = 0; i < N; i++) {
     const angle   = (i / N) * Math.PI * 2;
     const tiltAcc = (i / N) * Math.PI;
     const useMat  = (i % 3 === 0) ? discMat2 : discMat;
 
-    const dGeo = new THREE.CylinderGeometry(
-      BAND_TUBE * 0.72, BAND_TUBE * 0.72, 0.22, 8
-    );
     const disc = new THREE.Mesh(dGeo, useMat);
     placeOnBand(disc, angle, R);
     disc.rotateY(tiltAcc);
@@ -391,14 +395,18 @@ function buildThorns(ringGroup, R, cols) {
   );
   ringGroup.add(new THREE.Mesh(baseGeo, thornMat2.clone()));
 
+  const tallHeight = BAND_TUBE * 1.55;
+  const shortHeight = BAND_TUBE * 0.85;
+  const tallBaseR = 0.52;
+  const shortBaseR = 0.36;
+  const tallThornGeo = new THREE.CylinderGeometry(0.04, tallBaseR, tallHeight, 6);
+  const shortThornGeo = new THREE.CylinderGeometry(0.04, shortBaseR, shortHeight, 6);
+
   for (let i = 0; i < N; i++) {
     const angle  = (i / N) * Math.PI * 2;
     const isTall = i % 2 === 0;
-    const height = isTall ? BAND_TUBE * 1.55 : BAND_TUBE * 0.85;
-    const baseR  = isTall ? 0.52 : 0.36;
 
-    const thornGeo = new THREE.CylinderGeometry(0.04, baseR, height, 6);
-    const thorn    = new THREE.Mesh(thornGeo, isTall ? thornMat : thornMat2);
+    const thorn    = new THREE.Mesh(isTall ? tallThornGeo : shortThornGeo, isTall ? thornMat : thornMat2);
     placeOnBand(thorn, angle, R);
     ringGroup.add(thorn);
   }
