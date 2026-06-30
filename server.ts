@@ -143,6 +143,16 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
         }
 
         const history = ws.chatHistories[ringId];
+
+        // Prevent process memory exhaustion by limiting chat history size
+        const MAX_HISTORY = 50;
+        if (history.length >= MAX_HISTORY) {
+          // Remove enough oldest messages to stay under limit, ensuring we remove in pairs
+          // to maintain the expected 'user' -> 'model' alternation for the Gemini API.
+          const removeCount = history.length - MAX_HISTORY + 2;
+          history.splice(0, removeCount + (removeCount % 2));
+        }
+
         history.push({
           role: "user",
           parts: [{ text: content }]
