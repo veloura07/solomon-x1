@@ -24,6 +24,7 @@ describe('POST /api/predict', () => {
     originalEnv = { ...process.env };
     process.env.NODE_ENV = 'test';
     process.env.GEMINI_API_KEY = 'test-api-key';
+    process.env.VITE_API_SECRET = 'test-secret';
     mockGenerateContent.mockReset();
     vi.resetModules();
     app = (await import('../../server.ts')).app;
@@ -34,14 +35,42 @@ describe('POST /api/predict', () => {
     vi.clearAllMocks();
   });
 
+  it('should return 500 if VITE_API_SECRET is not configured', async () => {
+    delete process.env.VITE_API_SECRET;
+    vi.resetModules();
+    app = (await import('../../server.ts')).app;
+    const res = await request(app).post('/api/predict').send({ timeline: ['event1'] });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Server configuration error: API secret not configured.");
+  });
+
+  it('should return 401 if Authorization header is missing or invalid', async () => {
+    let res = await request(app).post('/api/predict').send({ timeline: ['event1'] });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Unauthorized access.");
+
+    res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer wrong-secret')
+      .send({ timeline: ['event1'] });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Unauthorized access.");
+  });
+
   it('should return 400 if timeline is missing', async () => {
-    const res = await request(app).post('/api/predict').send({});
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-secret')
+      .send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid timeline format. Expects array of events/context tags.");
   });
 
   it('should return 400 if timeline is not an array', async () => {
-    const res = await request(app).post('/api/predict').send({ timeline: 'not an array' });
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-secret')
+      .send({ timeline: 'not an array' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid timeline format. Expects array of events/context tags.");
   });
@@ -76,7 +105,10 @@ describe('POST /api/predict', () => {
     process.env.GEMINI_API_KEY = '';
     vi.resetModules();
     app = (await import('../../server.ts')).app;
-    const res = await request(app).post('/api/predict').send({ timeline: ['event1', 'event2'] });
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-secret')
+      .send({ timeline: ['event1', 'event2'] });
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("GEMINI_API_KEY not configured.");
   });
@@ -97,7 +129,10 @@ describe('POST /api/predict', () => {
     app = (await import('../../server.ts')).app;
 
     const timeline = ['started working', 'got stuck on a bug'];
-    const res = await request(app).post('/api/predict').send({ timeline });
+    const res = await request(app)
+      .post('/api/predict')
+      .set('Authorization', 'Bearer test-secret')
+      .send({ timeline });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(mockResponse);

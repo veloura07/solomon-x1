@@ -277,6 +277,16 @@ app.post("/api/chat", async (req, res) => {
 
 // 3. API: HOOD ANTICIPATORY SEQUENCE FORECAST (Translates context into predictive outcome vectors)
 app.post("/api/predict", async (req, res) => {
+  const apiSecret = process.env.VITE_API_SECRET;
+  if (!apiSecret) {
+    return res.status(500).json({ error: "Server configuration error: API secret not configured." });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${apiSecret}`) {
+    return res.status(401).json({ error: "Unauthorized access." });
+  }
+
   if (!ai) {
     return res.status(500).json({ error: "GEMINI_API_KEY not configured." });
   }

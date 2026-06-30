@@ -134,9 +134,13 @@ export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexP
     }
     setLoadingPrediction(true);
     try {
+      const apiSecret = import.meta.env.VITE_API_SECRET || "";
       const res = await fetch("/api/predict", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiSecret}`
+        },
         body: JSON.stringify({ timeline: timelineTags }),
       });
       if (!res.ok) throw new Error("Neural forecast module offline");
