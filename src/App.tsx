@@ -23,7 +23,6 @@ import {
   Layers, 
   Cpu, 
   Coins, 
-  Flame,
   Volume2,
   Lock,
   Unlock,
