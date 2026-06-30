@@ -9,6 +9,7 @@ import SovereignConsole from "./components/SovereignConsole";
 import { CognitiveResourceEconomy, Layer0Firewall, EvolutionLab } from "./components/SolomonOSComponents";
 import { CognitiveProficiencyRadar } from "./components/CogniciencyRadar";
 import AvatarCorePanel from "./components/AvatarCorePanel";
+import { useWebSocket } from "./hooks/useWebSocket";
 import { 
   Bot, 
   Brain, 
@@ -1109,195 +1110,19 @@ export default function App() {
   }, [isCommandModalOpen]);
 
   // 5. WebSocket Client with Exponential Backoff & State Monitoring
-  const [wsConnected, setWsConnected] = useState(false);
-  const [wsStatus, setWsStatus] = useState<'connected' | 'connecting' | 'failed'>('connecting');
-  const [wsFailedNotify, setWsFailedNotify] = useState(false);
-  const [wsNextRetrySeconds, setWsNextRetrySeconds] = useState<number>(0);
-  const reconnectTimeoutRef = useRef<any>(null);
-  const reconnectDelayRef = useRef<number>(1000);
-  const wsRef = useRef<WebSocket | null>(null);
-  const connectWebSocketRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    let isActive = true;
-    let countdownInterval: any = null;
-
-    const connectWebSocket = () => {
-      if (countdownInterval) clearInterval(countdownInterval);
-      setWsStatus('connecting');
-      
-      const wsUrl = (import.meta as any).env?.VITE_SOLOMON_WS_URL || "ws://localhost:8765";
-      console.log(`[SolomonOS] Unsealing secure socket channel: ${wsUrl}`);
-      
-      try {
-        const socket = new WebSocket(wsUrl);
-        wsRef.current = socket;
-
-        // Custom connection timing threshold
-        const connectionTimeout = setTimeout(() => {
-          if (socket.readyState === WebSocket.CONNECTING) {
-            console.warn("[SolomonOS] Socket connection timed out. Aborting and retrying.");
-            socket.close();
-          }
-        }, 8000);
-
-        socket.onopen = () => {
-          clearTimeout(connectionTimeout);
-          if (!isActive) return;
-          console.log("[SolomonOS] Cognitive link established successfully via WebSocket.");
-          setWsConnected(true);
-          setWsStatus('connected');
-          setWsFailedNotify(false);
-          reconnectDelayRef.current = 1000;
-          setWsNextRetrySeconds(0);
-          
-          handleAddAuditLog({
-            actor: "TrustOS Enclave",
-            action: "ESTABLISH_COGNITIVE_LINK",
-            status: "AUTHORIZED",
-            details: `Secure WebSocket interface verified. Connected to local cognitive engine at ${wsUrl}.`
-          });
-        };
-
-        socket.onmessage = (event) => {
-          if (!isActive) return;
-          try {
-            const dataJSON = JSON.parse(event.data);
-            console.log("[SolomonOS] Live frame telemetry package inbound:", dataJSON);
-            
-            if (dataJSON.event === "status") {
-              handleAddAuditLog({
-                actor: "brain.py",
-                action: "STATUS_UPDATE",
-                status: "AUTHORIZED",
-                details: `Core status transitions synced. Brain telemetry reported status is: [${dataJSON.state}]`
-              });
-            } else if (dataJSON.event === "token_stream") {
-              // Append tokens dynamically
-            } else if (dataJSON.event === "error") {
-              setChatError(dataJSON.message || "An exception occurred inside the local Ollama queue.");
-            }
-          } catch (e) {
-            console.error("[SolomonOS] Frame stream error parsing payload JSON:", e);
-          }
-        };
-
-        const handleConnectionFailure = (eventCode?: number) => {
-          clearTimeout(connectionTimeout);
-          if (!isActive) return;
-          
-          setWsConnected(false);
-          setWsStatus(prev => {
-            if (prev === 'connecting') {
-              setWsFailedNotify(true);
-            }
-            return 'failed';
-          });
-
-          // True Exponential backoff with random jitter (0 to 800ms) to prevent synchronization stampedes
-          const baseDelay = reconnectDelayRef.current;
-          const jitter = Math.random() * 800;
-          const totalDelay = Math.min(baseDelay * 2 + jitter, 30000);
-          reconnectDelayRef.current = Math.min(baseDelay * 2, 30000);
-          
-          const countdownMs = Math.round(totalDelay);
-          let remainingSeconds = Math.ceil(countdownMs / 1000);
-          setWsNextRetrySeconds(remainingSeconds);
-
-          if (countdownInterval) clearInterval(countdownInterval);
-          countdownInterval = setInterval(() => {
-            remainingSeconds -= 1;
-            setWsNextRetrySeconds(Math.max(0, remainingSeconds));
-            if (remainingSeconds <= 0) {
-              clearInterval(countdownInterval);
-            }
-          }, 1000);
-
-          console.warn(`[SolomonOS] Cognitive link suspended (Code: ${eventCode ?? 'ERR'}). Triggering exponential backoff. Retrying in ${remainingSeconds}s...`);
-
-          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (isActive) connectWebSocket();
-          }, countdownMs);
-        };
-
-        socket.onclose = (event) => {
-          handleConnectionFailure(event.code);
-        };
-
-        socket.onerror = (err) => {
-          console.error("[SolomonOS] Connection fault on websocket link:", err);
-        };
-      } catch (err) {
-        setWsConnected(false);
-        setWsStatus(prev => {
-          if (prev === 'connecting') {
-            setWsFailedNotify(true);
-          }
-          return 'failed';
-        });
-
-        const baseDelay = reconnectDelayRef.current;
-        const jitter = Math.random() * 800;
-        const totalDelay = Math.min(baseDelay * 2 + jitter, 30000);
-        reconnectDelayRef.current = Math.min(baseDelay * 2, 30000);
-
-        const countdownMs = Math.round(totalDelay);
-        let remainingSeconds = Math.ceil(countdownMs / 1000);
-        setWsNextRetrySeconds(remainingSeconds);
-
-        if (countdownInterval) clearInterval(countdownInterval);
-        countdownInterval = setInterval(() => {
-          remainingSeconds -= 1;
-          setWsNextRetrySeconds(Math.max(0, remainingSeconds));
-          if (remainingSeconds <= 0) {
-            clearInterval(countdownInterval);
-          }
-        }, 1000);
-
-        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (isActive) connectWebSocket();
-        }, countdownMs);
-      }
-    };
-
-    connectWebSocketRef.current = connectWebSocket;
-    connectWebSocket();
-
-    return () => {
-      isActive = false;
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (countdownInterval) {
-        clearInterval(countdownInterval);
-      }
-    };
-  }, []);
-
-  const handleManualReconnect = () => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-    reconnectDelayRef.current = 1000; // Reset initial backoff to 1s
-    setWsFailedNotify(false);
-    if (connectWebSocketRef.current) {
-      connectWebSocketRef.current();
-    }
-    handleAddAuditLog({
-      actor: "Sovereign Human",
-      action: "MANUAL_RECOVERY_TRIGGERED",
-      status: "AUTHORIZED",
-      details: "Bypassed exponential backoff timer. Forcing manual reconnection to WebSocket cognitive pool..."
-    });
-  };
+  const {
+    wsConnected,
+    wsStatus,
+    wsFailedNotify,
+    wsNextRetrySeconds,
+    wsRef,
+    handleManualReconnect,
+    setWsFailedNotify
+  } = useWebSocket({
+    url: (import.meta as any).env?.VITE_SOLOMON_WS_URL || "ws://localhost:8765",
+    onAuditLog: handleAddAuditLog,
+    onChatError: setChatError
+  });
 
   const handleOpenCommandPalette = () => {
     setCommandSearchQuery("");
