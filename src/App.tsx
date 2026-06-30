@@ -18,7 +18,6 @@ import {
   Fingerprint, 
   Mic, 
   Send, 
-  Sparkles, 
   ShieldCheck, 
   Layers, 
   Cpu, 
