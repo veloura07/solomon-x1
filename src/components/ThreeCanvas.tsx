@@ -2171,6 +2171,7 @@ export default function ThreeCanvas({
       planetRing?: THREE.Mesh | THREE.Group;
       orbitalCage?: THREE.Group;
       nodeGroups?: THREE.Group[];
+      nodesMat?: THREE.MeshPhysicalMaterial;
     }[];
 
     const DOMAIN_NAMES = [
@@ -2572,6 +2573,7 @@ export default function ThreeCanvas({
         planetRing,
         orbitalCage,
         nodeGroups: nodeGroupsArray,
+        nodesMat: nodesMat,
       });
     });
 
@@ -3870,10 +3872,61 @@ export default function ThreeCanvas({
           const N = pr.nodeGroups.length;
           const intensityFactor = intensity / 100;
           const motionTime = time * (0.4 + intensityFactor * 1.6);
+          const isHovered = (hoveredRingIndex === pr.index);
+
+          // Dynamic 3D updates for nodesMat physical material of the active nodes
+          if (pr.nodesMat) {
+            const selectPulse = isSelected ? (1.3 + 0.7 * Math.sin(time * 12.0)) : 1.0;
+            const hoverPulse = isHovered ? 0.6 : 0.0;
+            pr.nodesMat.emissiveIntensity = (0.5 + 0.6 * intensityFactor) * selectPulse + hoverPulse;
+
+            if (pr.index === 0) {
+              // 1. Ars Almadel: Fast orange-gold cyber firewall struts flashing
+              const flashVal = Math.sin(time * 14.0) > 0 ? 1 : 0;
+              pr.nodesMat.emissive.setHex(flashVal ? 0xf59e0b : 0xd97706);
+            } else if (pr.index === 1) {
+              // 2. Ars Notoria: Hex nodes memory pulsing
+              const pulse = 0.5 + 0.5 * Math.sin(time * 6.5);
+              pr.nodesMat.emissiveIntensity = (0.4 + 1.2 * pulse) * (isSelected ? 2.2 : 1.0) + hoverPulse;
+            } else if (pr.index === 2) {
+              // 3. Ars Paulina: Doubt evaluator chaotic green-yellow shifts
+              const pulseColor = Math.sin(time * 20.0) > 0.4 ? 0x22c55e : 0xeab308;
+              pr.nodesMat.emissive.setHex(isSelected ? pulseColor : 0x10b981);
+            } else if (pr.index === 3) {
+              // 4. Ars Goetia: Sandbox rapid red-purple compute flares
+              const flare = Math.sin(time * 24.0) > 0.82 ? 2.8 : 0.5;
+              pr.nodesMat.emissiveIntensity = flare * (isSelected ? 2.0 : 1.0) + hoverPulse;
+            } else if (pr.index === 4) {
+              // 5. Ars Theurgia: Harmonic purple/pink dimensional wave morphing
+              const colorLerp = 0.5 + 0.5 * Math.sin(time * 3.5);
+              pr.nodesMat.emissive.setHex(colorLerp > 0.5 ? 0x8b5cf6 : 0xec4899);
+            } else if (pr.index === 5) {
+              // 6. Ars Almiras: ECG sharp heart beats
+              const p = (time * 11.0) % (Math.PI * 2);
+              const heartbeat = Math.sin(p) > 0.82 ? 2.2 : 0.35;
+              pr.nodesMat.emissiveIntensity = heartbeat * (isSelected ? 1.6 : 1.0) + hoverPulse;
+            } else if (pr.index === 6) {
+              // 7. Ars Verum: Secure solid gold/blue gates
+              pr.nodesMat.emissiveIntensity = isSelected ? (1.6 + 0.4 * Math.cos(time * 4.5)) : 0.8;
+            } else if (pr.index === 7) {
+              // 8. Ars Ephesia: Jittery neon glitches
+              const glitch = Math.random() > 0.95 ? 2.4 : 0.55;
+              pr.nodesMat.emissiveIntensity = glitch * (isSelected ? 1.5 : 1.0) + hoverPulse;
+            } else if (pr.index === 8) {
+              // 9. Ars Fulcanelli: Chrono double audit clocks shifting between teal and silver
+              const col = Math.sin(time * 4.5) > 0 ? 0x06b6d4 : 0x94a3b8;
+              pr.nodesMat.emissive.setHex(col);
+            } else {
+              // 10. Ars Regalis: Senate gold aura breathing
+              const breathe = 0.55 + 0.45 * Math.sin(time * 3.8);
+              pr.nodesMat.emissiveIntensity = breathe * (isSelected ? 1.9 : 1.0) + hoverPulse;
+            }
+          }
 
           pr.nodeGroups.forEach((nodeGroup, i) => {
             const nodeAngle = (i / N) * Math.PI * 2;
             const baseRad = 8;
+            const selectScaleBoost = isSelected ? 1.35 : 1.0;
 
             if (pr.index === 0) {
               // 1. Ars Almadel: Rigid firewall shielding pulsations
@@ -3883,16 +3936,16 @@ export default function ThreeCanvas({
                 Math.sin(nodeAngle) * baseRad * breathe,
                 0
               );
-              nodeGroup.scale.setScalar(1.0 + 0.12 * Math.sin(motionTime * 5.0 + i * 0.4) * intensityFactor);
+              nodeGroup.scale.setScalar((1.0 + 0.12 * Math.sin(motionTime * 5.0 + i * 0.4) * intensityFactor) * selectScaleBoost);
             } else if (pr.index === 1) {
               // 2. Ars Notoria: Sequential cascaded indexing register scans
               const phase = motionTime * 2.5 + i * (Math.PI / 4);
               nodeGroup.rotation.y = phase;
-              nodeGroup.scale.setScalar(0.9 + 0.22 * Math.sin(phase) * intensityFactor);
+              nodeGroup.scale.setScalar((0.9 + 0.22 * Math.sin(phase) * intensityFactor) * selectScaleBoost);
             } else if (pr.index === 2) {
               // 3. Ars Paulina: Chaotic quantum skepticism fluctuations
               const fluctuation = Math.sin(motionTime * 7.5 + i * 1.3) * Math.cos(motionTime * 3.2 - i * 0.7);
-              nodeGroup.scale.setScalar(1.0 + 0.3 * fluctuation * intensityFactor);
+              nodeGroup.scale.setScalar((1.0 + 0.3 * fluctuation * intensityFactor) * selectScaleBoost);
               nodeGroup.position.set(
                 Math.cos(nodeAngle) * (baseRad + fluctuation * 0.9 * intensityFactor),
                 Math.sin(nodeAngle) * (baseRad + fluctuation * 0.9 * intensityFactor),
@@ -3901,13 +3954,13 @@ export default function ThreeCanvas({
             } else if (pr.index === 3) {
               // 4. Ars Goetia: Rapid sandboxed compute loop execution
               nodeGroup.rotation.z = nodeAngle + motionTime * 5.0;
-              nodeGroup.scale.setScalar(0.85 + 0.25 * Math.sin(motionTime * 11.0 + i) * intensityFactor);
+              nodeGroup.scale.setScalar((0.85 + 0.25 * Math.sin(motionTime * 11.0 + i) * intensityFactor) * selectScaleBoost);
             } else if (pr.index === 4) {
               // 5. Ars Theurgia: Harmonic multidimensional reality graphing
               nodeGroup.rotation.x = motionTime * 0.618 + i;
               nodeGroup.rotation.y = motionTime * 1.0 + i * 0.5;
               nodeGroup.rotation.z = nodeAngle + motionTime * 0.382;
-              nodeGroup.scale.setScalar(1.0 + 0.15 * Math.sin(motionTime * 3.0 + i) * intensityFactor);
+              nodeGroup.scale.setScalar((1.0 + 0.15 * Math.sin(motionTime * 3.0 + i) * intensityFactor) * selectScaleBoost);
             } else if (pr.index === 5) {
               // 6. Ars Almiras: Biometric focus telemetry wave shifts
               const telWave = Math.sin(motionTime * 4.2 + i * Math.PI / 2);
@@ -3916,11 +3969,11 @@ export default function ThreeCanvas({
                 Math.sin(nodeAngle) * (baseRad + telWave * 1.4 * intensityFactor),
                 0
               );
-              nodeGroup.scale.setScalar(0.95 + 0.2 * telWave * intensityFactor);
+              nodeGroup.scale.setScalar((0.95 + 0.2 * telWave * intensityFactor) * selectScaleBoost);
             } else if (pr.index === 6) {
               // 7. Ars Verum: Secure, majestic, absolute authorization gates
               const authPulse = Math.sin(motionTime * 1.8 + i * Math.PI / 4);
-              nodeGroup.scale.setScalar(1.0 + 0.2 * authPulse * (intensityFactor * 2.0));
+              nodeGroup.scale.setScalar((1.0 + 0.2 * authPulse * (intensityFactor * 2.0)) * selectScaleBoost);
               nodeGroup.rotation.x = authPulse * 0.4 * intensityFactor;
             } else if (pr.index === 7) {
               // 8. Ars Ephesia: Jittery high-frequency compaction shards
@@ -3935,7 +3988,7 @@ export default function ThreeCanvas({
               // 9. Ars Fulcanelli: Chronological interlocking counter-rotations
               const dir = (i % 2 === 0 ? 1 : -1);
               nodeGroup.rotation.y = dir * motionTime * 3.2;
-              nodeGroup.scale.setScalar(0.95 + 0.15 * Math.sin(motionTime * 2.8 + i) * intensityFactor);
+              nodeGroup.scale.setScalar((0.95 + 0.15 * Math.sin(motionTime * 2.8 + i) * intensityFactor) * selectScaleBoost);
             } else {
               // 10. Ars Regalis: Senate balance economy iris expansion
               const iris = Math.sin(motionTime * 2.0 + (i % 2) * Math.PI);
@@ -3944,7 +3997,7 @@ export default function ThreeCanvas({
                 Math.sin(nodeAngle) * (baseRad + iris * 1.1 * intensityFactor),
                 0
               );
-              nodeGroup.scale.setScalar(1.0 + 0.15 * iris * intensityFactor);
+              nodeGroup.scale.setScalar((1.0 + 0.15 * iris * intensityFactor) * selectScaleBoost);
             }
           });
         }
@@ -4388,6 +4441,22 @@ export default function ThreeCanvas({
         const specSegmentCount = 65536 + (activeAgent.detailType === 'hexNodes' ? 12288 : activeAgent.detailType === 'crystalFacets' ? 24576 : 8192);
         const rotationSpeed = (0.12 + selectedRingIndex * 0.045).toFixed(3);
         
+        const getAgentAnimationClass = (idx: number) => {
+          const classes = [
+            "animate-almadel",
+            "animate-notoria",
+            "animate-paulina",
+            "animate-goetia",
+            "animate-theurgia",
+            "animate-almiras",
+            "animate-verum",
+            "animate-ephesia",
+            "animate-fulcanelli",
+            "animate-regalis"
+          ];
+          return classes[idx] || "";
+        };
+
         // Find historical audit logs specific to this agent
         const filteredLogs = auditLogs.filter(
           (log) => log.actor.toLowerCase().includes(activeAgent.name.toLowerCase()) || 
@@ -4426,7 +4495,7 @@ export default function ThreeCanvas({
             <div className="p-4 border-b border-slate-900 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div 
-                  className="w-3.5 h-3.5 rounded-full" 
+                  className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${getAgentAnimationClass(activeAgent.index)}`} 
                   style={{ backgroundColor: `#${activeAgent.stoneColor.toString(16).padStart(6, '0')}`, boxShadow: `0 0 12px #${activeAgent.stoneColor.toString(16).padStart(6, '0')}` }} 
                 />
                 <div>
@@ -4480,7 +4549,7 @@ export default function ThreeCanvas({
                       <span className="text-[9px] text-slate-500 block">ORBIT ROT SPEED</span>
                       <span className="text-orange-400 font-bold font-mono">{rotationSpeed} rad/s</span>
                     </div>
-                    <div className="bg-slate-950/30 border border-slate-800/40 p-2.5 rounded-lg">
+                    <div className={`bg-slate-950/30 border border-slate-800/40 p-2.5 rounded-lg transition-all duration-300 ${getAgentAnimationClass(activeAgent.index)}`}>
                       <span className="text-[9px] text-slate-500 block">TACTILITY PATTERN</span>
                       <span className="text-purple-400 font-bold font-mono uppercase truncate">{activeAgent.detailType}</span>
                     </div>

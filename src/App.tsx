@@ -331,7 +331,149 @@ export default function App() {
     }
   ]);
   
+  const playHolographicClick = (ringIndex: number) => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+
+      // 1. Mechanical "Click" Component: Short high-pass filtered noise burst
+      const bufferSize = ctx.sampleRate * 0.025; // 25ms noise burst
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noiseNode = ctx.createBufferSource();
+      noiseNode.buffer = buffer;
+
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = "highpass";
+      noiseFilter.frequency.setValueAtTime(3500, now);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.06, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+
+      noiseNode.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noiseNode.start(now);
+
+      // 2. Holographic Resonant Sweeps & Chord Component
+      if (ringIndex === -1) {
+        // Recenter / system reset chime
+        const baseF = 440; // A4
+        const chordFreqs = [baseF, baseF * 1.5, baseF * 2.0]; // Perfect fourth/fifth stack
+        const masterGain = ctx.createGain();
+        masterGain.gain.setValueAtTime(0, now);
+        masterGain.gain.linearRampToValueAtTime(0.1, now + 0.01);
+        masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+        chordFreqs.forEach((freq) => {
+          const osc = ctx.createOscillator();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.3); // Descending swoop
+          const voiceGain = ctx.createGain();
+          voiceGain.gain.setValueAtTime(1.0 / chordFreqs.length, now);
+          osc.connect(voiceGain);
+          voiceGain.connect(masterGain);
+          osc.start(now);
+          osc.stop(now + 0.4);
+        });
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(1200, now);
+        filter.frequency.exponentialRampToValueAtTime(150, now + 0.35);
+
+        masterGain.connect(filter);
+        filter.connect(ctx.destination);
+        return;
+      }
+
+      // Base frequency tuned specifically per agent index
+      const baseFreqs = [
+        261.63, // C4 (Almadel)
+        293.66, // D4 (Notoria)
+        329.63, // E4 (Paulina)
+        349.23, // F4 (Goetia)
+        392.00, // G4 (Theurgia)
+        440.00, // A4 (Almiras)
+        493.88, // B4 (Verum)
+        523.25, // C5 (Ephesia)
+        587.33, // D5 (Fulcanelli)
+        659.25, // E5 (Regalis)
+      ];
+
+      const baseF = baseFreqs[ringIndex] || 330;
+      let chordFreqs = [baseF, baseF * 1.5]; // Default perfect fifth
+
+      // Custom thematic intervals per ring
+      if (ringIndex === 0) chordFreqs = [baseF, baseF * 1.5, baseF * 2.0]; // Almadel: Protected major octaves
+      else if (ringIndex === 1) chordFreqs = [baseF, baseF * 1.25, baseF * 1.5]; // Notoria: Logical major triad
+      else if (ringIndex === 2) chordFreqs = [baseF, baseF * 1.2, baseF * 1.5, baseF * 1.8]; // Paulina: Skeptical minor 7th
+      else if (ringIndex === 3) chordFreqs = [baseF, baseF * 1.19, baseF * 1.41]; // Goetia: Diminished tritone loops
+      else if (ringIndex === 4) chordFreqs = [baseF, baseF * 2.0, baseF * 3.0]; // Theurgia: Dimensional spatial octaves
+      else if (ringIndex === 5) chordFreqs = [baseF, baseF * 1.006, baseF * 2.0]; // Almiras: Biometric beating pulse
+      else if (ringIndex === 6) chordFreqs = [baseF, baseF * 1.25, baseF * 1.5, baseF * 1.875]; // Verum: Regal majestic major 7th
+      else if (ringIndex === 7) chordFreqs = [baseF, baseF * 1.5, baseF * 4.0]; // Ephesia: Compression high spike
+      else if (ringIndex === 8) chordFreqs = [baseF, baseF * 1.333, baseF * 2.666]; // Fulcanelli: Audit temporal 4ths
+      else if (ringIndex === 9) chordFreqs = [baseF, baseF * 1.25, baseF * 1.5, baseF * 2.0]; // Regalis: Senate full triad
+
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0, now);
+      masterGain.gain.linearRampToValueAtTime(0.12, now + 0.015);
+      masterGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+      chordFreqs.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        
+        // Triangle wave for some warmth, sine for pristine chime
+        if (ringIndex === 2 || ringIndex === 3 || ringIndex === 7) {
+          osc.type = "triangle";
+        } else {
+          osc.type = "sine";
+        }
+
+        osc.frequency.setValueAtTime(freq, now);
+        
+        // Pitch swoop: holographic sliding pitch
+        const pitchDirection = (ringIndex % 2 === 0) ? 1 : -1;
+        const bendAmount = freq * 0.04 * pitchDirection;
+        osc.frequency.exponentialRampToValueAtTime(freq + bendAmount, now + 0.12);
+        osc.frequency.linearRampToValueAtTime(freq, now + 0.45);
+
+        const voiceGain = ctx.createGain();
+        voiceGain.gain.setValueAtTime(1.0 / chordFreqs.length, now);
+
+        osc.connect(voiceGain);
+        voiceGain.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      });
+
+      // Bandpass/Lowpass resonant filter sweep
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.Q.setValueAtTime(6.0, now);
+      filter.frequency.setValueAtTime(400, now);
+      filter.frequency.exponentialRampToValueAtTime(1900, now + 0.07);
+      filter.frequency.exponentialRampToValueAtTime(250, now + 0.48);
+
+      masterGain.connect(filter);
+      filter.connect(ctx.destination);
+    } catch (e) {
+      console.warn("[SolomonOS] Web Audio API holographic click error:", e);
+    }
+  };
+
   const handleSelectRing = (idx: number) => {
+    // Play the physical tactile activation chime instantly upon clicking
+    playHolographicClick(idx);
+
     if (idx === selectedRingIndex) return;
     setIsCinematicFading(true);
     setTimeout(() => {
@@ -1870,20 +2012,63 @@ export default function App() {
                           <AnimatePresence>
                             {hoveredRingIndex === ag.index && (
                               <motion.div
-                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                initial={{ opacity: 0, y: 12, scale: 0.94 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                transition={{ duration: 0.15, ease: "easeOut" }}
-                                className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-950/98 border border-purple-500/40 rounded-xl shadow-2xl pointer-events-none text-left"
+                                exit={{ opacity: 0, y: 12, scale: 0.94 }}
+                                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                                className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-4 bg-slate-950/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.7)] pointer-events-none text-left"
                               >
-                                <div className="text-[10px] font-bold text-slate-100 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `#${ag.bandColor.toString(16).padStart(6, '0')}` }} />
-                                  {ag.name} System Instructions
+                                <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <span 
+                                      className="w-2 h-2 rounded-full ring-2 ring-slate-900/60 animate-pulse shrink-0" 
+                                      style={{ backgroundColor: `#${ag.bandColor.toString(16).padStart(6, '0')}` }} 
+                                    />
+                                    <span className="text-xs font-bold text-white tracking-wide">{ag.name}</span>
+                                  </div>
+                                  <span className="text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">
+                                    RING {["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][ag.index]}
+                                  </span>
                                 </div>
-                                <p className="text-[9px] text-slate-400 font-mono leading-relaxed normal-case">
-                                  {ag.agentInstructions}
-                                </p>
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-950" />
+
+                                <div className="grid grid-cols-2 gap-2 mb-3">
+                                  {/* Reputation Standing */}
+                                  <div className="bg-white/[0.03] border border-white/[0.06] p-2 rounded-xl flex flex-col justify-between">
+                                    <span className="text-[8px] text-slate-500 font-mono tracking-wider uppercase flex items-center gap-1">
+                                      <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" /> Reputation
+                                    </span>
+                                    <div className="mt-1 flex items-baseline gap-1">
+                                      <span className="text-[13px] font-bold text-white font-mono">{ag.reputationScore.toFixed(1)}%</span>
+                                    </div>
+                                    <div className="w-full h-1 bg-slate-900 rounded-full mt-1.5 overflow-hidden">
+                                      <div 
+                                        className={`h-full transition-all duration-500 ${ag.reputationScore < 50 ? 'bg-red-500' : ag.reputationScore < 75 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                        style={{ width: `${ag.reputationScore}%` }}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Available Token Pool */}
+                                  <div className="bg-white/[0.03] border border-white/[0.06] p-2 rounded-xl flex flex-col justify-between">
+                                    <span className="text-[8px] text-slate-500 font-mono tracking-wider uppercase flex items-center gap-1">
+                                      <Coins className="w-2.5 h-2.5 text-yellow-500" /> Token Pool
+                                    </span>
+                                    <div className="mt-1 flex items-baseline gap-1">
+                                      <span className="text-[13px] font-bold text-slate-100 font-mono">{ag.tokenPool.toLocaleString()}</span>
+                                      <span className="text-[7px] text-slate-500 font-mono">SOL</span>
+                                    </div>
+                                    <span className="text-[7px] text-slate-400 font-mono font-semibold mt-1">RESOURCES ACTIVE</span>
+                                  </div>
+                                </div>
+
+                                <div className="pt-2 border-t border-white/5 space-y-1">
+                                  <div className="text-[8px] text-slate-500 font-mono uppercase tracking-wider">Operational Mandate</div>
+                                  <p className="text-[9px] text-slate-400 font-mono leading-relaxed normal-case line-clamp-3">
+                                    {ag.agentInstructions}
+                                  </p>
+                                </div>
+
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[6px] border-transparent border-t-slate-950/80" />
                               </motion.div>
                             )}
                           </AnimatePresence>

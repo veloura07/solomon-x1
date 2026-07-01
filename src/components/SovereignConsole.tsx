@@ -1073,6 +1073,22 @@ export default function SovereignConsole({
                     break;
                 }
 
+                const getAgentAnimationClass = (idx: number) => {
+                  const classes = [
+                    "animate-almadel",
+                    "animate-notoria",
+                    "animate-paulina",
+                    "animate-goetia",
+                    "animate-theurgia",
+                    "animate-almiras",
+                    "animate-verum",
+                    "animate-ephesia",
+                    "animate-fulcanelli",
+                    "animate-regalis"
+                  ];
+                  return classes[idx] || "";
+                };
+
                 return (
                   <div className="bg-slate-900/40 border border-slate-900 rounded-xl p-4 space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -1080,7 +1096,7 @@ export default function SovereignConsole({
                         <span className="text-[9px] text-cyan-400 font-bold tracking-wider block uppercase">ACTIVE TARGET CALIBRATION</span>
                         <h5 className="text-xs font-bold text-slate-100 flex items-center gap-1.5 mt-0.5 font-sans">
                           <span 
-                            className="w-2.5 h-2.5 rounded-full ring-2 ring-slate-800" 
+                            className={`w-2.5 h-2.5 rounded-full ring-2 ring-slate-800 transition-all duration-300 ${getAgentAnimationClass(ringObj.index)}`} 
                             style={{ backgroundColor: "#" + ringObj.bandColor.toString(16) }}
                           />
                           {ringObj.name} — Ring {["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][ringObj.index]}

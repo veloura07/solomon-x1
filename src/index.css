@@ -66,3 +66,106 @@
 .animate-slideInRight {
   animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ─── Unique Agent-Specific Runic CSS Animations ─── */
+
+/* 1. Almadel: Cyber gold firewall pulse */
+@keyframes almadelFlash {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.4)); opacity: 0.85; }
+  50% { filter: drop-shadow(0 0 16px rgba(245, 158, 11, 1)); opacity: 1; }
+}
+.animate-almadel {
+  animation: almadelFlash 0.75s ease-in-out infinite;
+}
+
+/* 2. Notoria: Hex node memory pulsing */
+@keyframes notoriaPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; filter: brightness(1); }
+  50% { transform: scale(1.06); opacity: 1; filter: brightness(1.25); }
+}
+.animate-notoria {
+  animation: notoriaPulse 1.2s ease-in-out infinite;
+}
+
+/* 3. Paulina: Quantum skepticism jitter */
+@keyframes paulinaJitter {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  20% { transform: translate(-1.2px, 0.8px) scale(0.985); }
+  40% { transform: translate(1.2px, -0.8px) scale(1.015); }
+  60% { transform: translate(-0.8px, -1.2px) scale(0.995); }
+  80% { transform: translate(0.8px, 1.2px) scale(1.005); }
+}
+.animate-paulina {
+  animation: paulinaJitter 0.3s linear infinite;
+}
+
+/* 4. Goetia: Sandbox spin and compute loop */
+@keyframes goetiaSpin {
+  from { transform: rotate(0deg) scale(0.98); }
+  to { transform: rotate(360deg) scale(1.02); }
+}
+.animate-goetia {
+  animation: goetiaSpin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+/* 5. Theurgia: Dynamic ripple glow */
+@keyframes theurgiaRipple {
+  0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.45), 0 0 0 0 rgba(168, 85, 247, 0.25); }
+  100% { box-shadow: 0 0 0 10px rgba(168, 85, 247, 0), 0 0 0 20px rgba(168, 85, 247, 0); }
+}
+.animate-theurgia {
+  animation: theurgiaRipple 1.6s cubic-bezier(0.25, 0, 0, 1) infinite;
+}
+
+/* 6. Almiras: Biometric ECG flash */
+@keyframes almirasECG {
+  0%, 100% { opacity: 0.5; transform: scale(0.98); }
+  12% { opacity: 1; transform: scale(1.05); }
+  24% { opacity: 0.55; transform: scale(0.99); }
+  38% { opacity: 1; transform: scale(1.1); }
+  55% { opacity: 0.5; transform: scale(0.98); }
+}
+.animate-almiras {
+  animation: almirasECG 1.8s ease-in-out infinite;
+}
+
+/* 7. Verum: Secure authorization expansion */
+@keyframes verumGate {
+  0%, 100% { border-color: rgba(6, 182, 212, 0.35); box-shadow: 0 0 5px rgba(6, 182, 212, 0.2); }
+  50% { border-color: rgba(6, 182, 212, 0.95); box-shadow: 0 0 18px rgba(6, 182, 212, 0.55); }
+}
+.animate-verum {
+  animation: verumGate 1.1s ease-in-out infinite;
+}
+
+/* 8. Ephesia: Glitchy compression noise */
+@keyframes ephesiaGlitch {
+  0%, 100% { clip-path: inset(0 0 0 0); transform: skew(0deg); }
+  18% { clip-path: inset(4% 0 16% 0); transform: skew(-2.5deg); }
+  36% { clip-path: inset(18% 0 6% 0); transform: skew(2.5deg); }
+  54% { clip-path: inset(8% 0 24% 0); transform: skew(-1.5deg); }
+  72% { clip-path: inset(3% 0 28% 0); transform: skew(1.5deg); }
+}
+.animate-ephesia {
+  animation: ephesiaGlitch 0.5s steps(2) infinite;
+}
+
+/* 9. Fulcanelli: Audit clock dual-rotation */
+@keyframes fulcanelliRotation {
+  0% { transform: scale(0.98) rotate(0deg); }
+  50% { transform: scale(1.06) rotate(180deg); }
+  100% { transform: scale(0.98) rotate(360deg); }
+}
+.animate-fulcanelli {
+  animation: fulcanelliRotation 2.8s ease-in-out infinite;
+}
+
+/* 10. Regalis: Senate balance iris expand */
+@keyframes regalisIris {
+  0%, 100% { transform: scale(0.99); filter: saturate(1); }
+  50% { transform: scale(1.06); filter: saturate(1.35); }
+}
+.animate-regalis {
+  animation: regalisIris 1.8s ease-in-out infinite;
+}
+
