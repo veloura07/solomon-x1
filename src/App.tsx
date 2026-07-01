@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, FormEvent, useMemo } from "react";
 import gsap from "gsap";
+import { motion, AnimatePresence } from "motion/react";
 import { Message, MemoryItem, AuditLog, AgentSpec, TelemetryPoint } from "./types";
 import ThreeCanvas from "./components/ThreeCanvas";
 import MemoryCortex from "./components/MemoryCortex";
@@ -203,6 +204,7 @@ const INITIAL_AGENTS: AgentSpec[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<'presence' | 'directives' | 'economy' | 'firewall' | 'memory' | 'evolution' | 'trust' | 'twin' | 'alerts'>('presence');
   const [selectedRingIndex, setSelectedRingIndex] = useState(9); // Ars Regalis active by default
+  const [hoveredRingIndex, setHoveredRingIndex] = useState<number | null>(null);
   const [rotationLocked, setRotationLocked] = useState(false);
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
@@ -1721,44 +1723,71 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {sortedAgentsForTray.map((ag) => (
-                        <button
+                        <div
                           key={ag.index}
-                          id={`agent-card-${ag.index}`}
-                          onClick={() => handleSelectRing(ag.index)}
-                          className={`agent-ring-card p-2.5 border rounded-xl text-left transition-all duration-300 relative overflow-hidden ${
-                            selectedRingIndex === ag.index
-                              ? "bg-purple-950/25 border-purple-500/40 shadow-lg shadow-purple-500/5 text-purple-200"
-                              : "bg-slate-950/60 border-slate-900 hover:border-slate-800 text-slate-400"
-                          }`}
+                          className="relative"
+                          onMouseEnter={() => setHoveredRingIndex(ag.index)}
+                          onMouseLeave={() => setHoveredRingIndex(null)}
                         >
-                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                            <span 
-                              className="w-1.5 h-1.5 rounded-full shrink-0" 
-                              style={{ backgroundColor: "#" + ag.bandColor.toString(16) }}
-                            />
-                            <span className="text-[10px] font-bold font-mono tracking-normal text-slate-350">{ag.name}</span>
-                            {ag.domainName && (
-                              <span className="text-[7px] text-purple-400 font-mono ml-auto opacity-80 uppercase tracking-wider scale-90 origin-right">
-                                {ag.domainName}
+                          <button
+                            id={`agent-card-${ag.index}`}
+                            onClick={() => handleSelectRing(ag.index)}
+                            className={`agent-ring-card w-full p-2.5 border rounded-xl text-left transition-all duration-300 relative overflow-hidden ${
+                              selectedRingIndex === ag.index
+                                ? "bg-purple-950/25 border-purple-500/40 shadow-lg shadow-purple-500/5 text-purple-200"
+                                : "bg-slate-950/60 border-slate-900 hover:border-slate-800 text-slate-400"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span 
+                                className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                style={{ backgroundColor: "#" + ag.bandColor.toString(16) }}
+                              />
+                              <span className="text-[10px] font-bold font-mono tracking-normal text-slate-350">{ag.name}</span>
+                              {ag.domainName && (
+                                <span className="text-[7px] text-purple-400 font-mono ml-auto opacity-80 uppercase tracking-wider scale-90 origin-right">
+                                  {ag.domainName}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[8px] font-mono leading-tight block truncate text-slate-500 mb-1.5">{ag.roleDescription}</span>
+                            
+                            {/* Real-time reputation meter inside the tray card */}
+                            <div className="flex items-center justify-between gap-1 font-mono text-[7px] text-slate-500 mt-1">
+                              <span>Reputation</span>
+                              <span className={`${ag.reputationScore < 50 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                                {ag.reputationScore.toFixed(1)}%
                               </span>
-                            )}
-                          </div>
-                          <span className="text-[8px] font-mono leading-tight block truncate text-slate-500 mb-1.5">{ag.roleDescription}</span>
+                            </div>
+                            <div className="w-full h-0.5 bg-slate-900 rounded-full mt-1 overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-500 ${ag.reputationScore < 50 ? 'bg-red-500' : ag.reputationScore < 75 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                                style={{ width: `${ag.reputationScore}%` }}
+                              />
+                            </div>
+                          </button>
                           
-                          {/* Real-time reputation meter inside the tray card */}
-                          <div className="flex items-center justify-between gap-1 font-mono text-[7px] text-slate-500 mt-1">
-                            <span>Reputation</span>
-                            <span className={`${ag.reputationScore < 50 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                              {ag.reputationScore.toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="w-full h-0.5 bg-slate-900 rounded-full mt-1 overflow-hidden">
-                            <div 
-                              className={`h-full transition-all duration-500 ${ag.reputationScore < 50 ? 'bg-red-500' : ag.reputationScore < 75 ? 'bg-amber-500' : 'bg-purple-500'}`}
-                              style={{ width: `${ag.reputationScore}%` }}
-                            />
-                          </div>
-                        </button>
+                          <AnimatePresence>
+                            {hoveredRingIndex === ag.index && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                transition={{ duration: 0.15, ease: "easeOut" }}
+                                className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-950/98 border border-purple-500/40 rounded-xl shadow-2xl pointer-events-none text-left"
+                              >
+                                <div className="text-[10px] font-bold text-slate-100 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `#${ag.bandColor.toString(16).padStart(6, '0')}` }} />
+                                  {ag.name} System Instructions
+                                </div>
+                                <p className="text-[9px] text-slate-400 font-mono leading-relaxed normal-case">
+                                  {ag.agentInstructions}
+                                </p>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-950" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       ))}
                     </div>
                   </div>

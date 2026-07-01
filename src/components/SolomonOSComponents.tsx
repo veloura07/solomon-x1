@@ -23,8 +23,10 @@ import {
   Award,
   ShieldAlert,
   Plus,
-  Trash
+  Trash,
+  Scale
 } from "lucide-react";
+import { CognitiveRingNetworkMap } from "./CognitiveRingNetworkMap";
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -75,7 +77,7 @@ export function CognitiveResourceEconomy({
 
   // States & helper data structures for Recharts Visual Telemetry Dashboard
   const [selectedAgentChartIndex, setSelectedAgentChartIndex] = useState<number>(0);
-  const [dashboardTab, setDashboardTab] = useState<"compare" | "historical" | "diagnostics">("compare");
+  const [dashboardTab, setDashboardTab] = useState<"compare" | "historical" | "diagnostics" | "network">("compare");
 
   // Real-time diagnostics state for the 10 cognitive rings
   const [diagnostics, setDiagnostics] = useState<Array<{
@@ -232,32 +234,89 @@ export function CognitiveResourceEconomy({
   const totalStakedTokens = agents.reduce((sum, a) => sum + a.tokenPool, 0);
   const averageUtilityScore = 7.82; // EV * Confidence / Cost * Latency
 
-  // Simulate transfer of cognitive charge
+  // Algorithmic redistribution of token pools from high-reputation rings to lower-reputation rings
   const triggerEconomyBalancing = () => {
     setIsTransferring(true);
-    setTransferMessage("REBALANCING COGNITIVE TOKENS ACROSS ALL SPECTRUMS...");
+    setTransferMessage("CALCULATING COGNITIVE REPUTATION-FLOW RATES & REDISTRIBUTING TOKENS...");
     
     setTimeout(() => {
-      // Add audit log
-      onAddAuditLog({
-        actor: "CRE Governor",
-        action: "REBALANCE_MARKET_ALLOCATION",
-        status: "AUTHORIZED",
-        details: "Cognitive resource pools balanced dynamically. Restored all agents above emergency 600-token buffer."
-      });
+      // Sort agents by reputation score to identify donors and recipients
+      const sortedByRep = [...agents].sort((a, b) => b.reputationScore - a.reputationScore);
       
-      // Balance pools by checking who is rich/poor
-      agents.forEach(a => {
-        if (a.tokenPool < 650) {
-          onUpdateAgentPool(a.index, 150);
-        } else if (a.tokenPool > 1200) {
-          onUpdateAgentPool(a.index, -100);
+      // Donors: Top 4 high reputation agents
+      const donors = sortedByRep.slice(0, 4);
+      // Recipients: Bottom 4 lower reputation agents
+      const recipients = sortedByRep.slice(6);
+
+      // We will shift 150 tokens from each of the high-reputation donor pools,
+      // and add 150 tokens to each of the underfunded lower-reputation recipient pools.
+      let redistributedCount = 0;
+      donors.forEach(donor => {
+        if (donor.tokenPool > 400) {
+          onUpdateAgentPool(donor.index, -150);
+          redistributedCount += 150;
         }
       });
+
+      // Distribute the total collected pool evenly among recipients
+      if (recipients.length > 0) {
+        const share = Math.floor(redistributedCount / recipients.length);
+        recipients.forEach(recipient => {
+          onUpdateAgentPool(recipient.index, share);
+        });
+      }
+
+      onAddAuditLog({
+        actor: "CRE Governor",
+        action: "REBALANCE_COGNITIVE_ECONOMY",
+        status: "AUTHORIZED",
+        details: `Cognitive resource pools balanced dynamically. Shifted total of ${redistributedCount} tokens from high-reputation donors (${donors.map(d => d.name.replace("Ars ", "")).join(", ")}) to lower-reputation anchors (${recipients.map(r => r.name.replace("Ars ", "")).join(", ")}).`
+      });
       
-      setTransferMessage("COGNITIVE EQUILIBRIUM ESTABLISHED CORRECTLY.");
-      setTimeout(() => setIsTransferring(false), 2000);
+      setTransferMessage(`COGNITIVE EQUILIBRIUM COMPLETED: ${redistributedCount} TOKENS NORMALIZED ACROSS SENATE.`);
+      setTimeout(() => setIsTransferring(false), 2200);
     }, 1800);
+  };
+
+  const handleDownloadReport = () => {
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      system_status: diagnostics.filter(d => d.handshakeStatus === "FAULT_ISOLATED").length > 0 ? "WARNING" : "STABLE_SECURE",
+      average_latency: parseFloat((diagnostics.reduce((sum, d) => sum + d.latency, 0) / diagnostics.length).toFixed(2)),
+      average_throughput: parseFloat((diagnostics.reduce((sum, d) => sum + d.throughput, 0) / diagnostics.length).toFixed(2)),
+      total_errors: diagnostics.reduce((sum, d) => sum + d.errors, 0),
+      cognitive_rings: diagnostics.map(d => {
+        const ag = agents[d.index];
+        return {
+          ring_index: d.index,
+          name: ag ? ag.name : `Ring #${d.index}`,
+          reputation: ag ? ag.reputationScore : null,
+          token_pool: ag ? ag.tokenPool : null,
+          latency_rtt_ms: d.latency,
+          throughput_tps: d.throughput,
+          handshake_status: d.handshakeStatus,
+          errors: d.errors,
+          proof_hash: `sha_0x${((ag ? ag.bandColor : 0x0) ^ 0xabcdef).toString(16).slice(0, 8)}`,
+          diagnostic_log: d.diagnosticLog,
+          last_checked: d.lastChecked
+        };
+      })
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reportData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `solomon_cognitive_ring_report_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    onAddAuditLog({
+      actor: "Sovereign Human",
+      action: "DOWNLOAD_RING_REPORT",
+      status: "AUTHORIZED",
+      details: "Compiled and downloaded active cognitive audit diagnostics log to local environment disk."
+    });
   };
 
   const castSenateYay = () => {
@@ -380,6 +439,16 @@ export function CognitiveResourceEconomy({
             >
               Ring Diagnostics
             </button>
+            <button
+              onClick={() => setDashboardTab("network")}
+              className={`h-7 px-3 rounded-lg text-[9px] font-bold font-mono transition-all ${
+                dashboardTab === "network" 
+                  ? "bg-purple-600/20 border border-purple-500/40 text-purple-300"
+                  : "bg-slate-900 border border-slate-850 hover:border-slate-800 text-slate-400"
+              }`}
+            >
+              Cognitive Network Map
+            </button>
           </div>
         </div>
 
@@ -468,6 +537,20 @@ export function CognitiveResourceEconomy({
 
         {dashboardTab === "diagnostics" && (
           <div className="space-y-4 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40 p-4 border border-slate-900 rounded-xl">
+              <div>
+                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Active Enclave Diagnostics & Auditing</h4>
+                <p className="text-[10px] text-slate-500 mt-1 uppercase">Download secure JSON audits representing network telemetry, latency indices, and consensus status logs.</p>
+              </div>
+              <button
+                onClick={handleDownloadReport}
+                className="h-8 px-3 rounded-lg bg-cyan-600/10 border border-cyan-500/30 hover:bg-cyan-500/20 hover:border-cyan-400/40 text-cyan-300 text-[10px] font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                DOWNLOAD COGNITIVE AUDIT REPORT (JSON)
+              </button>
+            </div>
+
             <div className="bg-slate-900/10 border border-slate-900/65 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse font-mono text-[11px]">
@@ -640,6 +723,14 @@ export function CognitiveResourceEconomy({
             </div>
           </div>
         )}
+
+        {dashboardTab === "network" && (
+          <CognitiveRingNetworkMap 
+            agents={agents}
+            selectedAgentIndex={selectedAgentChartIndex}
+            onSelectAgent={(index) => setSelectedAgentChartIndex(index)}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -790,13 +881,21 @@ export function CognitiveResourceEconomy({
             </div>
           </div>
 
-          <div className="flex gap-2 pt-4 border-t border-slate-800">
+          <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-slate-800">
             <button 
               onClick={castSenateYay}
-              className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-slate-100 rounded-xl transition flex items-center justify-center gap-1.5"
+              className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-slate-100 rounded-xl transition flex items-center justify-center gap-1.5"
             >
               <CheckCircle className="w-3.5 h-3.5" />
               CONFIRM MASTER APPROVAL (YAY)
+            </button>
+            <button 
+              onClick={triggerEconomyBalancing}
+              disabled={isTransferring}
+              className="flex-1 h-9 bg-purple-600 hover:bg-purple-500 text-[10px] font-bold text-slate-100 rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <Scale className={`w-3.5 h-3.5 ${isTransferring ? 'animate-spin' : ''}`} />
+              BALANCE COGNITIVE ECONOMY
             </button>
           </div>
         </div>
