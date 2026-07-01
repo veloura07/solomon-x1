@@ -2985,9 +2985,17 @@ export default function ThreeCanvas({
       lastRenderTime = now - (elapsed % FRAME_DURATION);
 
       let delta = clock.getDelta();
+      if (isNaN(delta) || typeof delta !== "number" || delta <= 0) {
+        delta = 0.0166;
+      }
       // Prevent jumpy rotations and extreme jitters by clamping the high-precision clock delta
       delta = Math.max(0.0001, Math.min(0.05, delta));
-      const time = clock.getElapsedTime();
+      
+      let rawTime = clock.getElapsedTime();
+      if (isNaN(rawTime) || typeof rawTime !== "number") {
+        rawTime = 0.0;
+      }
+      const time = rawTime;
       
       const autoRotSpeed = rotationLockedRef.current ? 0.0 : 1.0;
       animTime += delta * autoRotSpeed;
@@ -3021,12 +3029,13 @@ export default function ThreeCanvas({
       // Extract Gemini confidence and system latency globally for use across multiple render layers & post-processing filters
       let agentConfidence = 0.92;
       const activeAgentSpec = activeIdx !== -1 ? agentsRef.current.find(a => a.index === activeIdx) : undefined;
-      if (activeAgentSpec) {
+      if (activeAgentSpec && typeof activeAgentSpec.confidenceScore === "number" && !isNaN(activeAgentSpec.confidenceScore)) {
         agentConfidence = activeAgentSpec.confidenceScore;
       }
       
       const latestPoint = telemetryData && telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined;
-      const currentLatency = latestPoint?.geminiLatency ?? 1300; // latency in ms
+      const rawLatencyVal = latestPoint?.geminiLatency ?? 1300;
+      const currentLatency = typeof rawLatencyVal === "number" && !isNaN(rawLatencyVal) ? rawLatencyVal : 1300;
       
       // Calculate dynamic pulse rate from system latency
       const rawPulseSpeed = 1000.0 / Math.max(200.0, currentLatency); // cycles per second
@@ -3246,9 +3255,9 @@ export default function ThreeCanvas({
         
         scratchStellarVec.multiplyScalar(distanceMultiplier);
         
-        coronaArr[idx] = scratchStellarVec.x;
-        coronaArr[idx + 1] = scratchStellarVec.y;
-        coronaArr[idx + 2] = scratchStellarVec.z;
+        coronaArr[idx] = isNaN(scratchStellarVec.x) ? 0.0 : scratchStellarVec.x;
+        coronaArr[idx + 1] = isNaN(scratchStellarVec.y) ? 0.0 : scratchStellarVec.y;
+        coronaArr[idx + 2] = isNaN(scratchStellarVec.z) ? 0.0 : scratchStellarVec.z;
       }
       coronaPosAttr.needsUpdate = true;
       
@@ -3768,9 +3777,9 @@ export default function ThreeCanvas({
             const swayX = Math.sin(time * swaySpeed + t * Math.PI) * 0.25 * swayMultiplier;
             const swayY = Math.cos(time * (swaySpeed * 0.8) + t * Math.PI) * 0.25 * swayMultiplier;
 
-            posArray[i * 3] = THREE.MathUtils.lerp(hubPos.x, ringPos.x, t) + swayX;
-            posArray[i * 3 + 1] = THREE.MathUtils.lerp(hubPos.y, ringPos.y, t) + swayY;
-            posArray[i * 3 + 2] = THREE.MathUtils.lerp(hubPos.z, ringPos.z, t);
+            posArray[i * 3] = isNaN(THREE.MathUtils.lerp(hubPos.x, ringPos.x, t) + swayX) ? 0.0 : THREE.MathUtils.lerp(hubPos.x, ringPos.x, t) + swayX;
+            posArray[i * 3 + 1] = isNaN(THREE.MathUtils.lerp(hubPos.y, ringPos.y, t) + swayY) ? 0.0 : THREE.MathUtils.lerp(hubPos.y, ringPos.y, t) + swayY;
+            posArray[i * 3 + 2] = isNaN(THREE.MathUtils.lerp(hubPos.z, ringPos.z, t)) ? 0.0 : THREE.MathUtils.lerp(hubPos.z, ringPos.z, t);
           }
           posAttribute.needsUpdate = true;
 

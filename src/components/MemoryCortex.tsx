@@ -19,24 +19,9 @@ import {
 interface MemoryCortexProps {
   memoryItems: MemoryItem[];
   onAddMemory: (newItem: Omit<MemoryItem, "id" | "timestamp">) => void;
-  runtimeSnapshot?: {
-    taskCounts: {
-      total: number;
-      pending: number;
-      planning: number;
-      running: number;
-      completed: number;
-      failed: number;
-      cancelled: number;
-    };
-    learning: {
-      totalTasks: number;
-      successRate: number;
-    };
-  } | null;
 }
 
-export default function MemoryCortex({ memoryItems, onAddMemory, runtimeSnapshot }: MemoryCortexProps) {
+export default function MemoryCortex({ memoryItems, onAddMemory }: MemoryCortexProps) {
   const [subModule, setSubModule] = useState<"cortex" | "dream" | "gravity">("cortex");
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -44,7 +29,6 @@ export default function MemoryCortex({ memoryItems, onAddMemory, runtimeSnapshot
   const [compactedIds, setCompactedIds] = useState<string[]>([]);
   const [decaySpeed, setDecaySpeed] = useState<number>(1.0); // Simulation rapidity modifier
   const [lastCheckTime, setLastCheckTime] = useState<number>(Date.now());
-  const [toastCounter, setToastCounter] = useState(0);
 
   interface ToastItem {
     id: string;
@@ -56,10 +40,8 @@ export default function MemoryCortex({ memoryItems, onAddMemory, runtimeSnapshot
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const addToast = (shardsCount: number, totalBytes: number) => {
-    const nextToastIndex = toastCounter + 1;
-    setToastCounter(nextToastIndex);
     const newToast: ToastItem = {
-      id: `toast_${Date.now()}_${nextToastIndex}`,
+      id: Math.random().toString(),
       message: "MemoryCortex Compaction Complete",
       subtext: `Successfully compacted ${shardsCount} decayed memory shard${shardsCount > 1 ? "s" : ""} on system registers.`,
       bytesRecovered: totalBytes,
@@ -99,7 +81,7 @@ export default function MemoryCortex({ memoryItems, onAddMemory, runtimeSnapshot
     const rawRelevance = 100 * Math.exp(-decayConstant * ageInMinutes);
     
     // Integrity buffers protect high-quality elements with tags from decaying too fast
-    const integrityBuffer = Math.min(25, (item.tags.length * 3.5) + (item.detailedContent.length / 60) + Math.round((runtimeSnapshot?.learning.successRate ?? 0.85) * 4));
+    const integrityBuffer = Math.min(25, (item.tags.length * 3.5) + (item.detailedContent.length / 60));
     const relevanceScore = Math.max(6, Math.min(100, Math.round(rawRelevance + integrityBuffer)));
     
     return {
@@ -222,11 +204,10 @@ export default function MemoryCortex({ memoryItems, onAddMemory, runtimeSnapshot
     setActiveDreamSequence(true);
     setDreamLogs([
       "DREAM CYCLE ACTIVATED: TRIGGERING CONCURRENT RE-INDEXING...",
-      `LIVE BACKEND SNAPSHOT: ${runtimeSnapshot?.taskCounts.total ?? 0} tasks, ${runtimeSnapshot?.taskCounts.running ?? 0} running.`,
       "EXTRACTING CONVERSATION LOGS AT L2 TIERS -> TRANSFORMING TO L3 EPISODES...",
       "INDEXING L3 RELATIONAL NODE-WEIGHT CONNECTIONS -> CREATING L4 GRAPHS...",
       "CONDENSING SEMANTIC PATHWAYS INTO L8 WISDOM AXIOMS...",
-      `COMPACTED ${Math.max(1, Math.round((runtimeSnapshot?.learning.totalTasks ?? 8) * 0.18))}% UNSTABLE SHARDS. MEMORY SAVINGS: +118kb.`
+      "COMPACTED 14.8% UNSTABLE SHARDS. MEMORY SAVINGS: +118kb."
     ]);
 
     setTimeout(() => {
@@ -239,9 +220,9 @@ export default function MemoryCortex({ memoryItems, onAddMemory, runtimeSnapshot
     setTimeout(() => {
       setGoals(prev => prev.map(g => ({
         ...g,
-        pull: Math.min(100, Math.round(g.mass * 1.08 + (runtimeSnapshot?.taskCounts.running ?? 0) * 5)),
-        alignment: Math.min(100, Math.round(g.alignment + ((runtimeSnapshot?.learning.successRate ?? 0.85) * 3) - 1)),
-        drift: Math.max(0, Math.round(g.drift + (runtimeSnapshot?.taskCounts.failed ?? 0) * 2 - 1))
+        pull: Math.min(100, Math.round(g.mass * 1.15 + (Math.random() * 8 - 4))),
+        alignment: Math.min(100, Math.round(g.alignment + (Math.random() * 6 - 3))),
+        drift: Math.max(0, Math.round(g.drift + (Math.random() * 4 - 2)))
       })));
       setIsSimulatingGravity(false);
     }, 1500);

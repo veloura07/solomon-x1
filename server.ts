@@ -5,7 +5,6 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { SolomonKernelRuntime } from "./src/solomon/phase1/runtime";
 
 dotenv.config();
 
@@ -81,51 +80,10 @@ const server = http.createServer(app);
 
 // Mount the WebSocket Server
 const wss = new WebSocketServer({ server });
-const kernel = new SolomonKernelRuntime();
-const connectedSockets = new Set<WebSocket>();
-
-const broadcast = (payload: unknown) => {
-  const message = JSON.stringify(payload);
-  for (const client of connectedSockets) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  }
-};
-
-const broadcastKernelSnapshot = async () => {
-  const snapshot = await kernel.snapshot();
-  broadcast({
-    type: "runtime.snapshot",
-    payload: snapshot,
-  });
-};
-
-kernel.bus.subscribe(
-  ["TASK_CREATED", "TASK_UPDATED", "TASK_CANCELLED", "PLANNING_DONE", "AGENT_SELECTION", "AGENT_STATE", "AGENT_RESPONSE", "TOOL_EXECUTION_REQUEST", "TOOL_EXECUTION_RESPONSE", "VALIDATION_DONE", "RESPONSE_READY", "TASK_COMPLETED", "TASK_FAILED", "LEARNING_INGESTED"],
-  async (event) => {
-    if (event.type === "RESPONSE_READY" && event.payload && typeof event.payload === "object") {
-      broadcast({ type: "kernel.response", payload: event.payload });
-      await broadcastKernelSnapshot();
-      return;
-    }
-
-    broadcast(event);
-    if (event.type === "TASK_COMPLETED" || event.type === "TASK_FAILED") {
-      await broadcastKernelSnapshot();
-    }
-  },
-  { async: false, priority: 100 },
-);
-
-setInterval(() => {
-  void broadcastKernelSnapshot();
-}, 1000);
 
 // Track WebSocket connections
 wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: Record<string, Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>> }) => {
   console.log("[WS] Client connected to Solomon Cognition Pipeline");
-  connectedSockets.add(ws);
   ws.activeRingId = "ars_almadel";
   ws.chatHistories = {};
 
@@ -146,7 +104,6 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
         event: "models",
         list: ["gemini-3.5-flash", "gemini-3.1-pro-preview"]
       }));
-      void broadcastKernelSnapshot();
     } else if (event === "ring_selected") {
       const ringId = payload.ring_id || "ars_almadel";
       ws.activeRingId = ringId;
@@ -165,25 +122,6 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
         ws.send(JSON.stringify({ event: "error", message: "Empty/invalid content parameter" }));
         return;
       }
-
-      void kernel.dispatchUserMessage({
-        userId: payload.user_id || "ws-user",
-        content,
-        metadata: {
-          ringId,
-          source: "websocket",
-        },
-      });
-
-      ws.send(JSON.stringify({ event: "status", state: "thinking" }));
-      ws.send(JSON.stringify({
-        event: "kernel.message_received",
-        payload: {
-          ringId,
-          content,
-        }
-      }));
-      return;
 
       const activePersona = PERSONAS[ringId] || PERSONAS.ars_almadel;
 
@@ -251,7 +189,6 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
 
   ws.on("close", () => {
     console.log("[WS] Client disconnected");
-    connectedSockets.delete(ws);
   });
 });
 

@@ -53,28 +53,3 @@ export interface TelemetryPoint {
   momentum: number; // 0 to 100
   geminiLatency?: number; // Response latency in ms
 }
-
-export interface RuntimeTaskCounts {
-  total: number;
-  pending: number;
-  planning: number;
-  running: number;
-  completed: number;
-  failed: number;
-  cancelled: number;
-}
-
-export interface RuntimeSnapshot {
-  generatedAt: string;
-  taskCounts: RuntimeTaskCounts;
-  agentCount: number;
-  toolNames: string[];
-  memoryCounts: {
-    hotEntries: number;
-    conversationTurns: number;
-  };
-  learning: {
-    totalTasks: number;
-    successRate: number;
-  };
-}
