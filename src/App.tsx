@@ -268,10 +268,35 @@ export default function App() {
     // 2. Detect re-ordering within the tray grid
     const currentOrderStr = sortedAgentsForTray.map(a => a.index).join(",");
     if (prevOrderStrRef.current && prevOrderStrRef.current !== currentOrderStr) {
-      // Order has changed! Trigger GSAP tray-wide transition
+      // Order has changed!
+      const prevOrder = prevOrderStrRef.current.split(",").map(Number);
+      const currentOrder = currentOrderStr.split(",").map(Number);
+
+      // Find indices of agents whose rankings have shifted
+      const shiftedIndices: number[] = [];
+      currentOrder.forEach((id, currentIdx) => {
+        const prevIdx = prevOrder.indexOf(id);
+        if (prevIdx !== -1 && prevIdx !== currentIdx) {
+          shiftedIndices.push(id);
+        }
+      });
+
+      // Apply a subtle elastic scale pulse on shifted cards to represent rank changes physically
+      currentOrder.forEach(id => {
+        const el = document.getElementById(`agent-card-${id}`);
+        if (el && shiftedIndices.includes(id)) {
+          gsap.timeline()
+            .fromTo(el,
+              { scale: 1.06, borderColor: "#c084fc", boxShadow: "0 0 15px rgba(168, 85, 247, 0.45)" },
+              { scale: 1, borderColor: id === selectedRingIndex ? "#a855f7" : "#0f172a", boxShadow: "0 0 0px rgba(0,0,0,0)", duration: 0.8, ease: "elastic.out(1, 0.55)" }
+            );
+        }
+      });
+
+      // Trigger standard physical layout shift translation with stagger
       gsap.fromTo(".agent-ring-card", 
-        { y: 12, opacity: 0.6, scale: 0.95 },
-        { y: 0, opacity: 1, scale: 1, duration: 0.5, stagger: 0.03, ease: "power2.out" }
+        { y: 15, opacity: 0.7 },
+        { y: 0, opacity: 1, duration: 0.5, stagger: 0.03, ease: "power3.out" }
       );
     }
     prevOrderStrRef.current = currentOrderStr;
@@ -2010,12 +2035,13 @@ export default function App() {
               onAddMemory={handleAddMemory}
               onAddAuditLog={handleAddAuditLog}
               onSetSelectedRingIndex={handleSelectRing}
-              onUpdateAgentPool={(index, tokensAdded) => {
+              onUpdateAgentPool={(index, tokensAdded, reputationAdded) => {
                 setAgents(prev => prev.map(ag => {
                   if (ag.index === index) {
                     return {
                       ...ag,
-                      tokenPool: ag.tokenPool + tokensAdded
+                      tokenPool: ag.tokenPool + tokensAdded,
+                      reputationScore: reputationAdded ? Math.min(100, Math.max(0, ag.reputationScore + reputationAdded)) : ag.reputationScore
                     };
                   }
                   return ag;
@@ -2086,8 +2112,12 @@ export default function App() {
             <CognitiveResourceEconomy 
               agents={agents}
               onAddAuditLog={handleAddAuditLog}
-              onUpdateAgentPool={(index, amt) => {
-                setAgents(prev => prev.map(ag => ag.index === index ? { ...ag, tokenPool: ag.tokenPool + amt } : ag));
+              onUpdateAgentPool={(index, amt, reputationAdded) => {
+                setAgents(prev => prev.map(ag => ag.index === index ? { 
+                  ...ag, 
+                  tokenPool: ag.tokenPool + amt,
+                  reputationScore: reputationAdded ? Math.min(100, Math.max(0, ag.reputationScore + reputationAdded)) : ag.reputationScore
+                } : ag));
               }}
             />
           )}

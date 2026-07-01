@@ -28,7 +28,7 @@ interface SovereignConsoleProps {
   onAddAuditLog: (log: Omit<AuditLog, "id" | "timestamp" | "cryptographicHash">) => void;
   onAddChatMessage: (agentName: string, content: string, systemInstruction: string) => void;
   onSetSelectedRingIndex: (index: number) => void;
-  onUpdateAgentPool: (index: number, tokens: number) => void;
+  onUpdateAgentPool: (index: number, tokens: number, reputationAdded?: number) => void;
 }
 
 export default function SovereignConsole({

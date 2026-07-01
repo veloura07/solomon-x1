@@ -61,26 +61,45 @@ export function CognitiveRingNetworkMap({
       domain: ag.domainName || "COGNITIVE",
     }));
 
-    const links: NetworkLink[] = [
-      // Ring structure connections (0-1-2-3-4-5-6-7-8-9-0)
-      { source: "Ars Almadel", target: "Ars Notoria", value: 3 },
-      { source: "Ars Notoria", target: "Ars Paulina", value: 3 },
-      { source: "Ars Paulina", target: "Ars Goetia", value: 3 },
-      { source: "Ars Goetia", target: "Ars Theurgia", value: 3 },
-      { source: "Ars Theurgia", target: "Ars Almiras", value: 3 },
-      { source: "Ars Almiras", target: "Ars Verum", value: 3 },
-      { source: "Ars Verum", target: "Ars Ephesia", value: 3 },
-      { source: "Ars Ephesia", target: "Ars Fulcanelli", value: 3 },
-      { source: "Ars Fulcanelli", target: "Ars Regalis", value: 3 },
-      { source: "Ars Regalis", target: "Ars Almadel", value: 3 },
+    // Links are dynamically weighted by the volume of reputation tokens exchanged between them,
+    // reflecting the live Cognitive Resource Economy status.
+    const links: NetworkLink[] = [];
+    
+    // 1. Ring adjacent connections (0-1-2-...-9-0)
+    for (let i = 0; i < agents.length; i++) {
+      const sourceAg = agents[i];
+      const targetAg = agents[(i + 1) % agents.length];
+      const avgTokens = (sourceAg.tokenPool + targetAg.tokenPool) / 2;
+      // Map token pool to weight values between 2 and 6
+      const value = Math.max(1.5, Math.min(6, (avgTokens / 1200) * 4));
+      links.push({
+        source: sourceAg.name,
+        target: targetAg.name,
+        value,
+      });
+    }
 
-      // Cross-cognitive flows representing high-level synergy pathways
-      { source: "Ars Almadel", target: "Ars Verum", value: 5 }, // origin -> evolution
-      { source: "Ars Notoria", target: "Ars Ephesia", value: 4 }, // memory -> harmony
-      { source: "Ars Paulina", target: "Ars Fulcanelli", value: 4 }, // doubt -> temporal
-      { source: "Ars Goetia", target: "Ars Regalis", value: 5 }, // execution -> core
-      { source: "Ars Theurgia", target: "Ars Almiras", value: 4 }, // creation -> simulation
+    // 2. High-volume cross-cognitive pathways
+    const crossPairs = [
+      [0, 5], // Ars Almadel <-> Ars Almiras
+      [1, 6], // Ars Notoria <-> Ars Verum
+      [2, 7], // Ars Paulina <-> Ars Ephesia
+      [3, 8], // Ars Goetia <-> Ars Fulcanelli
+      [4, 9], // Ars Theurgia <-> Ars Regalis
     ];
+    crossPairs.forEach(([sIdx, tIdx]) => {
+      const sourceAg = agents[sIdx];
+      const targetAg = agents[tIdx];
+      if (sourceAg && targetAg) {
+        const avgTokens = (sourceAg.tokenPool + targetAg.tokenPool) / 2;
+        const value = Math.max(1.5, Math.min(6, (avgTokens / 1400) * 5));
+        links.push({
+          source: sourceAg.name,
+          target: targetAg.name,
+          value,
+        });
+      }
+    });
 
     // Add SVG patterns/definitions for glow effect
     const defs = svg.append("defs");
@@ -128,11 +147,11 @@ export function CognitiveRingNetworkMap({
       .data(links)
       .enter()
       .append("line")
-      .attr("stroke", "rgba(139, 92, 246, 0.25)")
-      .attr("stroke-width", (d) => Math.sqrt(d.value) * 1.5)
-      .attr("stroke-dasharray", "4, 4")
+      .attr("stroke", "rgba(168, 85, 247, 0.35)")
+      .attr("stroke-width", (d) => Math.sqrt(d.value) * 2.2)
+      .attr("stroke-dasharray", "5, 4")
       .attr("class", "reputation-flow-line")
-      .style("animation", "flow 25s linear infinite");
+      .style("animation-duration", (d) => `${Math.max(4, 20 - d.value * 3)}s`);
 
     // Add CSS stylesheet inside SVG for hardware-accelerated flow animations
     svg.append("style").text(`
@@ -142,7 +161,9 @@ export function CognitiveRingNetworkMap({
       }
       .reputation-flow-line {
         stroke-dasharray: 6, 4;
-        animation: flow 12s linear infinite;
+        animation-name: flow;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
       }
       .pulse-node {
         transition: r 0.2s ease-out, stroke-width 0.2s ease-out;

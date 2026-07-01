@@ -47,7 +47,7 @@ import { AgentSpec, AuditLog } from "../types";
 interface CognitiveResourceEconomyProps {
   agents: AgentSpec[];
   onAddAuditLog: (newLog: any) => void;
-  onUpdateAgentPool: (index: number, tokensAdded: number) => void;
+  onUpdateAgentPool: (index: number, tokensAdded: number, reputationAdded?: number) => void;
 }
 
 export function CognitiveResourceEconomy({ 
@@ -88,6 +88,7 @@ export function CognitiveResourceEconomy({
     errors: number;
     lastChecked: string;
     diagnosticLog: string;
+    uptime: number;
   }>>(() => agents.map(ag => ({
     index: ag.index,
     latency: Math.round(45 + Math.random() * 80),
@@ -95,7 +96,8 @@ export function CognitiveResourceEconomy({
     handshakeStatus: ag.index === 9 ? "SYNCHRONIZED" : "SECURE_CONNECTED",
     errors: Math.floor(Math.random() * 2),
     lastChecked: "JUST NOW",
-    diagnosticLog: "All registers validated against hardware TPM seed-hash."
+    diagnosticLog: "All registers validated against hardware TPM seed-hash.",
+    uptime: Number((99.5 + Math.random() * 0.49).toFixed(3))
   })));
 
   useEffect(() => {
@@ -122,6 +124,10 @@ export function CognitiveResourceEconomy({
           }
         }
 
+        const newUptime = status === "FAULT_ISOLATED"
+          ? Math.max(92.15, d.uptime - 0.05 - Math.random() * 0.05)
+          : Math.min(100.00, d.uptime + 0.005 + Math.random() * 0.005);
+
         return {
           ...d,
           latency: rep < 50.0 ? Math.round(450 + Math.random() * 120) : Math.round(45 + Math.random() * 50),
@@ -129,7 +135,8 @@ export function CognitiveResourceEconomy({
           handshakeStatus: status,
           errors,
           lastChecked: new Date().toLocaleTimeString(),
-          diagnosticLog: log
+          diagnosticLog: log,
+          uptime: Number(newUptime.toFixed(3))
         };
       }));
     }, 3500);
@@ -157,7 +164,8 @@ export function CognitiveResourceEconomy({
           handshakeStatus: "SYNCHRONIZED",
           errors: 0,
           lastChecked: "FORCE_VERIFIED",
-          diagnosticLog: "Sovereign master bypass triggered. Cryptographic checksums fully unsealed and validated."
+          diagnosticLog: "Sovereign master bypass triggered. Cryptographic checksums fully unsealed and validated.",
+          uptime: Math.min(100.00, d.uptime + 0.05)
         };
       }
       return d;
@@ -252,17 +260,32 @@ export function CognitiveResourceEconomy({
       // and add 150 tokens to each of the underfunded lower-reputation recipient pools.
       let redistributedCount = 0;
       donors.forEach(donor => {
-        if (donor.tokenPool > 400) {
+        if (donor.tokenPool > 450) {
           onUpdateAgentPool(donor.index, -150);
           redistributedCount += 150;
         }
       });
 
-      // Distribute the total collected pool evenly among recipients
+      // Distribute the total collected pool evenly among recipients, preventing stagnation
+      let stagnationRecoveredCount = 0;
       if (recipients.length > 0) {
         const share = Math.floor(redistributedCount / recipients.length);
         recipients.forEach(recipient => {
-          onUpdateAgentPool(recipient.index, share);
+          let poolBoost = share;
+          let reputationBoost = 0;
+
+          // 1. Critical Token Stagnation Prevention: if pool is critically low (< 600), add a baseline recovery boost
+          if (recipient.tokenPool < 600) {
+            poolBoost += 75; // dynamic stabilization subsidy
+          }
+
+          // 2. Critical Reputation Stagnation Prevention: if reputation score is < 60%, apply a stabilizing reputation bump
+          if (recipient.reputationScore < 60.0) {
+            reputationBoost = Number((4.5 + Math.random() * 4).toFixed(2));
+            stagnationRecoveredCount++;
+          }
+
+          onUpdateAgentPool(recipient.index, poolBoost, reputationBoost);
         });
       }
 
@@ -270,10 +293,10 @@ export function CognitiveResourceEconomy({
         actor: "CRE Governor",
         action: "REBALANCE_COGNITIVE_ECONOMY",
         status: "AUTHORIZED",
-        details: `Cognitive resource pools balanced dynamically. Shifted total of ${redistributedCount} tokens from high-reputation donors (${donors.map(d => d.name.replace("Ars ", "")).join(", ")}) to lower-reputation anchors (${recipients.map(r => r.name.replace("Ars ", "")).join(", ")}).`
+        details: `Cognitive resource pools balanced dynamically. Shifted total of ${redistributedCount} tokens from high-reputation donors (${donors.map(d => d.name.replace("Ars ", "")).join(", ")}) to lower-reputation anchors (${recipients.map(r => r.name.replace("Ars ", "")).join(", ")}). Prevented stagnation in ${stagnationRecoveredCount} rings via target resource injections.`
       });
       
-      setTransferMessage(`COGNITIVE EQUILIBRIUM COMPLETED: ${redistributedCount} TOKENS NORMALIZED ACROSS SENATE.`);
+      setTransferMessage(`COGNITIVE EQUILIBRIUM COMPLETED: ${redistributedCount} TOKENS NORMALIZED. STAGNATING RINGS REVITALIZED.`);
       setTimeout(() => setIsTransferring(false), 2200);
     }, 1800);
   };
@@ -294,6 +317,7 @@ export function CognitiveResourceEconomy({
           token_pool: ag ? ag.tokenPool : null,
           latency_rtt_ms: d.latency,
           throughput_tps: d.throughput,
+          uptime_percentage: d.uptime,
           handshake_status: d.handshakeStatus,
           errors: d.errors,
           proof_hash: `sha_0x${((ag ? ag.bandColor : 0x0) ^ 0xabcdef).toString(16).slice(0, 8)}`,
@@ -437,7 +461,7 @@ export function CognitiveResourceEconomy({
                   : "bg-slate-900 border border-slate-850 hover:border-slate-800 text-slate-400"
               }`}
             >
-              Ring Diagnostics
+              Ring Handshake Diagnostics
             </button>
             <button
               onClick={() => setDashboardTab("network")}
@@ -557,11 +581,10 @@ export function CognitiveResourceEconomy({
                   <thead>
                     <tr className="border-b border-slate-900 bg-slate-950/40 text-slate-500 text-[9px] uppercase tracking-wider">
                       <th className="py-2.5 px-4 font-bold">Ring</th>
-                      <th className="py-2.5 px-4 font-bold">Status</th>
+                      <th className="py-2.5 px-4 font-bold">Handshake Status</th>
                       <th className="py-2.5 px-4 font-bold">Latency (RTT)</th>
-                      <th className="py-2.5 px-4 font-bold">Throughput</th>
-                      <th className="py-2.5 px-4 font-bold">Errors</th>
-                      <th className="py-2.5 px-4 font-bold hidden md:table-cell">Enclave Proof</th>
+                      <th className="py-2.5 px-4 font-bold">Uptime (%)</th>
+                      <th className="py-2.5 px-4 font-bold">Cryptographic Status</th>
                       <th className="py-2.5 px-4 font-bold text-right">Actions</th>
                     </tr>
                   </thead>
@@ -594,6 +617,11 @@ export function CognitiveResourceEconomy({
 
                       // Create a synthetic sha code for mock-integrity verification
                       const shaCode = `sha_0x${(agent.bandColor ^ 0xabcdef).toString(16).slice(0, 8)}`;
+                      const cryptoStatus = diag.errors > 0 
+                        ? "INTEGRITY_BREACH" 
+                        : diag.handshakeStatus === "SYNCHRONIZED" 
+                          ? "VERIFIED_SECURE_TRUST_ROOT" 
+                          : "VERIFIED_SECURE";
 
                       return (
                         <tr 
@@ -643,35 +671,25 @@ export function CognitiveResourceEconomy({
                             </div>
                           </td>
 
-                          {/* Throughput */}
+                          {/* Uptime % */}
+                          <td className="py-3 px-4 font-mono">
+                            <span className={diag.uptime < 95 ? "text-red-400 font-bold" : "text-emerald-400"}>
+                              {diag.uptime.toFixed(3)}%
+                            </span>
+                          </td>
+
+                          {/* Cryptographic Status */}
                           <td className="py-3 px-4">
-                            <div className="space-y-1">
-                              <span className="text-slate-200">{diag.throughput} T/s</span>
-                              <div className="w-16 h-1 bg-slate-900 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-cyan-400"
-                                  style={{ width: `${Math.min(100, (diag.throughput / 60) * 100)}%` }}
-                                />
-                              </div>
+                            <div className="flex flex-col gap-1">
+                              <span className={`text-[9px] font-bold ${
+                                diag.errors > 0 ? "text-red-400" : "text-purple-300"
+                              }`}>
+                                {cryptoStatus}
+                              </span>
+                              <span className="font-mono text-[8px] text-slate-500">
+                                {shaCode}
+                              </span>
                             </div>
-                          </td>
-
-                          {/* Error Counts */}
-                          <td className="py-3 px-4">
-                            <span className={`px-1.5 py-0.5 rounded font-bold ${
-                              hasErrors 
-                                ? "bg-red-500/10 border border-red-500/25 text-red-400 font-extrabold animate-pulse" 
-                                : "text-slate-500"
-                            }`}>
-                              {diag.errors}
-                            </span>
-                          </td>
-
-                          {/* Cryptographic Enclave Proof */}
-                          <td className="py-3 px-4 hidden md:table-cell text-slate-600">
-                            <span className="font-mono text-[9px] bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-900/65">
-                              {shaCode}
-                            </span>
                           </td>
 
                           {/* Manual actions */}
