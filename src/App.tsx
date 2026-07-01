@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent, useMemo } from "react";
+import { useState, useEffect, useRef, FormEvent, useMemo, KeyboardEvent } from "react";
 import gsap from "gsap";
 import { motion, AnimatePresence } from "motion/react";
 import { Message, MemoryItem, AuditLog, AgentSpec, TelemetryPoint } from "./types";
@@ -510,6 +510,30 @@ export default function App() {
         setIsCinematicFading(false);
       }, 250);
     }, 250);
+  };
+
+  const handleTrayKeyDown = (e: KeyboardEvent, currentAgIndex: number) => {
+    const currentIndex = sortedAgentsForTray.findIndex(a => a.index === currentAgIndex);
+    if (currentIndex === -1) return;
+
+    let nextIndex = currentIndex;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % sortedAgentsForTray.length;
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + sortedAgentsForTray.length) % sortedAgentsForTray.length;
+      e.preventDefault();
+    } else {
+      return;
+    }
+
+    const nextAgent = sortedAgentsForTray[nextIndex];
+    if (nextAgent) {
+      const nextButton = document.getElementById(`agent-card-${nextAgent.index}`);
+      if (nextButton) {
+        nextButton.focus();
+      }
+    }
   };
 
   const [bloomThreshold, setBloomThreshold] = useState<number>(0.22);
@@ -1974,6 +1998,9 @@ export default function App() {
                           <button
                             id={`agent-card-${ag.index}`}
                             onClick={() => handleSelectRing(ag.index)}
+                            onKeyDown={(e) => handleTrayKeyDown(e, ag.index)}
+                            onFocus={() => setHoveredRingIndex(ag.index)}
+                            onBlur={() => setHoveredRingIndex(null)}
                             className={`agent-ring-card w-full p-2.5 border rounded-xl text-left transition-all duration-300 relative overflow-hidden ${
                               selectedRingIndex === ag.index
                                 ? "bg-purple-950/25 border-purple-500/40 shadow-lg shadow-purple-500/5 text-purple-200"
