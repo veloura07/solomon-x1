@@ -208,6 +208,7 @@ export default function App() {
   const [rotationLocked, setRotationLocked] = useState(false);
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
+  const [voiceMood, setVoiceMood] = useState<'warm' | 'cold' | 'neutral'>('neutral');
   
   // GSAP individual card pulsing on reputation drift and shuffle tracking
   const prevRepsRef = useRef<Record<number, number>>({});
@@ -505,10 +506,12 @@ export default function App() {
   // Subtle CSS-transition manager using GSAP-based color tweens to smoothly interpolate CSS variables
   const currentTweenColors = useRef({
     primary: "#450a0a",
-    accent: "#ec4899"
+    accent: "#ec4899",
+    glow: "rgba(236, 72, 153, 0.16)",
+    muted: "rgba(236, 72, 153, 0.05)"
   });
 
-  // Dynamically adjust root CSS variables when the active agent shifts using GSAP
+  // Dynamically adjust root CSS variables when the active agent or voice mood shifts using GSAP
   useEffect(() => {
     // Helper to format 0xRRGGBB as a 6-character hex color string
     const hexColorStr = (colorNum: number) => `#${colorNum.toString(16).padStart(6, "0")}`;
@@ -521,24 +524,40 @@ export default function App() {
       targetAccent = hexColorStr(activeAgent.accentColor);
     }
 
+    // Determine target glow & muted colors based on current voice mood classification
+    let targetGlow = `${targetAccent}2a`;
+    let targetMuted = `${targetAccent}0e`;
+
+    if (voiceMood === "warm") {
+      targetGlow = "rgba(245, 158, 11, 0.35)"; // Warmer amber/gold glow (#f59e0b)
+      targetMuted = "rgba(245, 158, 11, 0.08)";
+    } else if (voiceMood === "cold") {
+      targetGlow = "rgba(6, 182, 212, 0.35)"; // Colder cyan glow (#06b6d4)
+      targetMuted = "rgba(6, 182, 212, 0.08)";
+    }
+
     // Kill any active GSAP tweens of this object to avoid competition
     gsap.killTweensOf(currentTweenColors.current);
 
     gsap.to(currentTweenColors.current, {
       primary: targetPrimary,
       accent: targetAccent,
-      duration: 0.82,
+      glow: targetGlow,
+      muted: targetMuted,
+      duration: 1.1,
       ease: "power2.out",
       onUpdate: () => {
         const prim = currentTweenColors.current.primary;
         const ac = currentTweenColors.current.accent;
+        const gl = currentTweenColors.current.glow;
+        const mt = currentTweenColors.current.muted;
         document.documentElement.style.setProperty("--agent-primary", prim);
         document.documentElement.style.setProperty("--agent-accent", ac);
-        document.documentElement.style.setProperty("--agent-accent-glow", `${ac}2a`);
-        document.documentElement.style.setProperty("--agent-accent-muted", `${ac}0e`);
+        document.documentElement.style.setProperty("--agent-accent-glow", gl);
+        document.documentElement.style.setProperty("--agent-accent-muted", mt);
       }
     });
-  }, [activeAgent]);
+  }, [activeAgent, voiceMood]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -1126,12 +1145,64 @@ export default function App() {
     setTelemetryData(newData);
   };
 
+  // Sentiment mood analysis helper based on user input
+  const analyzeVoiceSentiment = (text: string): 'warm' | 'cold' | 'neutral' => {
+    const cleaned = text.toLowerCase();
+    
+    // Words of encouragement, optimization, praise, security, safety
+    const warmKeywords = [
+      "good", "great", "excellent", "awesome", "yes", "perfect", "amazing", "beautiful", 
+      "smooth", "happy", "success", "resolved", "harden", "safe", "secure", "unseal", 
+      "stabilize", "trust", "complete", "authorized", "aligned", "align", "unsealed", 
+      "love", "thanks", "thank you", "stellar", "high-fidelity", "reward", "active"
+    ];
+    
+    // Words of errors, systemic warnings, critical debugging, threats, latency, compact
+    const coldKeywords = [
+      "error", "fail", "failure", "broken", "critical", "urgent", "hacks", "breach", 
+      "threat", "severe", "diagnose", "audit", "system", "compact", "websocket", 
+      "sync", "inspect", "reconnect", "tpm", "firmware", "directives", "shards", 
+      "slow", "delay", "high latency", "decay", "danger", "warning", "force", 
+      "bypassed", "unauthorized", "unstable", "reputation", "degrade", "lost"
+    ];
+
+    let warmScore = 0;
+    let coldScore = 0;
+
+    warmKeywords.forEach(word => {
+      if (cleaned.includes(word)) warmScore += 1;
+    });
+
+    coldKeywords.forEach(word => {
+      if (cleaned.includes(word)) coldScore += 1;
+    });
+
+    if (cleaned.includes("!")) {
+      if (warmScore > coldScore) warmScore += 1;
+      else if (coldScore > warmScore) coldScore += 1;
+    }
+
+    if (warmScore > coldScore) return 'warm';
+    if (coldScore > warmScore) return 'cold';
+    return 'neutral';
+  };
+
   // Direct Intent Extraction from voice input to parse transcribed speech for commands, navigation, and focus switches
   const extractVoiceIntent = (text: string) => {
     const cleanedText = text.toLowerCase();
     
-    // Toast notification to let the user know we're parsing voice intents!
-    showToastNotification("VOICE INTENT DETECTED", `Parsing transcribed phrase: "${text}"`, "info");
+    // Analyze sentiment of user input
+    const sentiment = analyzeVoiceSentiment(text);
+    setVoiceMood(sentiment);
+
+    // Dynamic toast notification depending on classified mood
+    if (sentiment === "warm") {
+      showToastNotification("VOICE SENTIMENT DETECTED", `Tone: WARM POSITIVE. Adapting agent accent glow variables.`, "success");
+    } else if (sentiment === "cold") {
+      showToastNotification("VOICE SENTIMENT DETECTED", `Tone: COLD SERIOUS. Adapting agent accent glow variables.`, "warning");
+    } else {
+      showToastNotification("VOICE SENTIMENT DETECTED", `Tone: BALANCED NEUTRAL. Utilizing standard agent colors.`, "info");
+    }
 
     // 1. Check for Agent Alignment Swaps
     const agentKeywords = [
@@ -1308,6 +1379,10 @@ export default function App() {
     setChatInput("");
     setSendingChat(true);
     setChatError("");
+
+    // Analyze the prompt's sentiment and adjust agent-accent-glow dynamically
+    const promptSentiment = analyzeVoiceSentiment(userText);
+    setVoiceMood(promptSentiment);
 
     // 1. Append user message locally
     const userMessage: Message = {
@@ -1851,7 +1926,19 @@ export default function App() {
                         </p>
                       </div>
                     </div>
-                    <Cpu className="w-4 h-4 text-slate-500" />
+                    <div className="flex items-center gap-2">
+                      {voiceMood !== "neutral" && (
+                        <div className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded font-mono uppercase border transition-all duration-500 flex items-center gap-1 ${
+                          voiceMood === "warm" 
+                            ? "bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.25)]" 
+                            : "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.25)]"
+                        }`}>
+                          <span className={`w-1 h-1 rounded-full shrink-0 ${voiceMood === "warm" ? "bg-amber-400 animate-pulse" : "bg-cyan-400 animate-pulse"}`} />
+                          MOOD: {voiceMood === "warm" ? "WARM POSITIVE" : "COLD SERIOUS"}
+                        </div>
+                      )}
+                      <Cpu className="w-4 h-4 text-slate-500" />
+                    </div>
                   </div>
 
                   {/* Dialogue Stream */}
