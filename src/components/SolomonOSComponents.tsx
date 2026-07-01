@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import gsap from "gsap";
 import { 
   Coins, 
   Cpu, 
@@ -74,7 +75,99 @@ export function CognitiveResourceEconomy({
 
   // States & helper data structures for Recharts Visual Telemetry Dashboard
   const [selectedAgentChartIndex, setSelectedAgentChartIndex] = useState<number>(0);
-  const [dashboardTab, setDashboardTab] = useState<"compare" | "historical">("compare");
+  const [dashboardTab, setDashboardTab] = useState<"compare" | "historical" | "diagnostics">("compare");
+
+  // Real-time diagnostics state for the 10 cognitive rings
+  const [diagnostics, setDiagnostics] = useState<Array<{
+    index: number;
+    latency: number;
+    throughput: number;
+    handshakeStatus: "SECURE_CONNECTED" | "SYNCHRONIZED" | "IDLE_STANDBY" | "FAULT_ISOLATED";
+    errors: number;
+    lastChecked: string;
+    diagnosticLog: string;
+  }>>(() => agents.map(ag => ({
+    index: ag.index,
+    latency: Math.round(45 + Math.random() * 80),
+    throughput: Math.round(15 + Math.random() * 40),
+    handshakeStatus: ag.index === 9 ? "SYNCHRONIZED" : "SECURE_CONNECTED",
+    errors: Math.floor(Math.random() * 2),
+    lastChecked: "JUST NOW",
+    diagnosticLog: "All registers validated against hardware TPM seed-hash."
+  })));
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDiagnostics(prev => prev.map(d => {
+        const ag = agents[d.index];
+        const rep = ag ? ag.reputationScore : 100;
+        
+        let status = d.handshakeStatus;
+        let errors = d.errors;
+        let log = d.diagnosticLog;
+        
+        if (rep < 50.0) {
+          status = "FAULT_ISOLATED";
+          if (Math.random() < 0.25) {
+            errors += 1;
+            log = `Stagnation fault detected. Latency breached 500ms threshold.`;
+          }
+        } else {
+          status = d.index === 9 ? "SYNCHRONIZED" : (Math.random() < 0.9 ? "SECURE_CONNECTED" : "IDLE_STANDBY");
+          if (errors > 0 && Math.random() < 0.1) {
+            errors = Math.max(0, errors - 1);
+            log = `Self-healing protocol resolved previous stagnation index fault.`;
+          }
+        }
+
+        return {
+          ...d,
+          latency: rep < 50.0 ? Math.round(450 + Math.random() * 120) : Math.round(45 + Math.random() * 50),
+          throughput: rep < 50.0 ? Math.round(2 + Math.random() * 8) : Math.round(20 + Math.random() * 30),
+          handshakeStatus: status,
+          errors,
+          lastChecked: new Date().toLocaleTimeString(),
+          diagnosticLog: log
+        };
+      }));
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [agents]);
+
+  const handleTriggerDiagnosticPing = (idx: number) => {
+    const agent = agents[idx];
+    if (!agent) return;
+    
+    // Trigger GSAP pulse animation on the specific diagnostic row/card
+    const rowEl = document.getElementById(`diag-row-${idx}`);
+    if (rowEl) {
+      gsap.timeline()
+        .to(rowEl, { scale: 1.015, backgroundColor: "rgba(168, 85, 247, 0.12)", borderColor: "#a855f7", duration: 0.15, ease: "power1.out" })
+        .to(rowEl, { scale: 1, backgroundColor: "rgba(15, 23, 42, 0.2)", borderColor: "rgba(30, 41, 59, 0.4)", duration: 0.3, ease: "power1.inOut" });
+    }
+
+    setDiagnostics(prev => prev.map(d => {
+      if (d.index === idx) {
+        return {
+          ...d,
+          latency: Math.round(15 + Math.random() * 15),
+          throughput: Math.round(55 + Math.random() * 15),
+          handshakeStatus: "SYNCHRONIZED",
+          errors: 0,
+          lastChecked: "FORCE_VERIFIED",
+          diagnosticLog: "Sovereign master bypass triggered. Cryptographic checksums fully unsealed and validated."
+        };
+      }
+      return d;
+    }));
+
+    onAddAuditLog({
+      actor: "Sovereign Human",
+      action: "MANUAL_RING_DIAGNOSTIC",
+      status: "AUTHORIZED",
+      details: `Manual diagnostic ping routed to ${agent.name} (Ring #${idx}). Communicational baseline restored and error count reset.`
+    });
+  };
   
   const currentAgent = agents[selectedAgentChartIndex] || agents[0];
   const reputation = currentAgent?.reputationScore || 90;
@@ -277,10 +370,20 @@ export function CognitiveResourceEconomy({
             >
               Agent Micro-Audit
             </button>
+            <button
+              onClick={() => setDashboardTab("diagnostics")}
+              className={`h-7 px-3 rounded-lg text-[9px] font-bold font-mono transition-all ${
+                dashboardTab === "diagnostics" 
+                  ? "bg-purple-600/20 border border-purple-500/40 text-purple-300"
+                  : "bg-slate-900 border border-slate-850 hover:border-slate-800 text-slate-400"
+              }`}
+            >
+              Ring Diagnostics
+            </button>
           </div>
         </div>
 
-        {dashboardTab === "compare" ? (
+        {dashboardTab === "compare" && (
           <div className="space-y-4 animate-fadeIn">
             <div className="h-64 sm:h-72 w-full text-[10px] font-sans">
               <ResponsiveContainer width="100%" height="100%">
@@ -303,7 +406,9 @@ export function CognitiveResourceEconomy({
               * Real-time comparison showing token allocation (left scale, gold) against current reputation parameters (right scale, purple)
             </p>
           </div>
-        ) : (
+        )}
+
+        {dashboardTab === "historical" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center animate-fadeIn">
             {/* Left controller: list of ring agents */}
             <div className="lg:col-span-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
@@ -356,6 +461,181 @@ export function CognitiveResourceEconomy({
                     <Area yAxisId="r" type="monotone" dataKey="rep" name="Reputation Drift" stroke="#22c55e" fillOpacity={1} fill="url(#colorRep)" />
                   </AreaChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {dashboardTab === "diagnostics" && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="bg-slate-900/10 border border-slate-900/65 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse font-mono text-[11px]">
+                  <thead>
+                    <tr className="border-b border-slate-900 bg-slate-950/40 text-slate-500 text-[9px] uppercase tracking-wider">
+                      <th className="py-2.5 px-4 font-bold">Ring</th>
+                      <th className="py-2.5 px-4 font-bold">Status</th>
+                      <th className="py-2.5 px-4 font-bold">Latency (RTT)</th>
+                      <th className="py-2.5 px-4 font-bold">Throughput</th>
+                      <th className="py-2.5 px-4 font-bold">Errors</th>
+                      <th className="py-2.5 px-4 font-bold hidden md:table-cell">Enclave Proof</th>
+                      <th className="py-2.5 px-4 font-bold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diagnostics.map((diag) => {
+                      const agent = agents[diag.index];
+                      if (!agent) return null;
+
+                      // Status Badge classes
+                      let statusBadge = "";
+                      let statusText = diag.handshakeStatus;
+                      if (diag.handshakeStatus === "SYNCHRONIZED") {
+                        statusBadge = "bg-cyan-500/10 border-cyan-500/20 text-cyan-400";
+                      } else if (diag.handshakeStatus === "SECURE_CONNECTED") {
+                        statusBadge = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+                      } else if (diag.handshakeStatus === "IDLE_STANDBY") {
+                        statusBadge = "bg-amber-500/10 border-amber-500/20 text-amber-400";
+                      } else if (diag.handshakeStatus === "FAULT_ISOLATED") {
+                        statusBadge = "bg-red-500/10 border border-red-500/30 text-red-400 animate-pulse";
+                      }
+
+                      // Latency Color
+                      let latencyColor = "text-slate-300";
+                      if (diag.latency > 300) latencyColor = "text-red-400 font-bold";
+                      else if (diag.latency > 100) latencyColor = "text-amber-400";
+                      else latencyColor = "text-emerald-400";
+
+                      // Error badge color
+                      const hasErrors = diag.errors > 0;
+
+                      // Create a synthetic sha code for mock-integrity verification
+                      const shaCode = `sha_0x${(agent.bandColor ^ 0xabcdef).toString(16).slice(0, 8)}`;
+
+                      return (
+                        <tr 
+                          key={diag.index}
+                          id={`diag-row-${diag.index}`}
+                          className="border-b border-slate-900/60 hover:bg-slate-900/20 transition-all"
+                        >
+                          {/* Ring Index & Name */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full ring-2 ring-slate-950 flex-shrink-0" 
+                                style={{ backgroundColor: `#${agent.bandColor.toString(16).padStart(6, "0")}` }} 
+                              />
+                              <div>
+                                <span className="font-bold text-slate-200 block">{agent.name}</span>
+                                <span className="text-[9px] text-slate-500 uppercase">{agent.domainName}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Handshake Status */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              {diag.handshakeStatus === "SYNCHRONIZED" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                              )}
+                              {diag.handshakeStatus === "FAULT_ISOLATED" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                              )}
+                              <span className={`px-2 py-0.5 rounded-full border text-[9px] font-semibold tracking-wider ${statusBadge}`}>
+                                {statusText}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Latency (RTT) */}
+                          <td className="py-3 px-4 font-mono">
+                            <div className="space-y-1">
+                              <span className={`${latencyColor}`}>{diag.latency} ms</span>
+                              <div className="w-16 h-1 bg-slate-900 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full ${diag.latency > 300 ? 'bg-red-500' : diag.latency > 100 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                  style={{ width: `${Math.min(100, (diag.latency / 500) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Throughput */}
+                          <td className="py-3 px-4">
+                            <div className="space-y-1">
+                              <span className="text-slate-200">{diag.throughput} T/s</span>
+                              <div className="w-16 h-1 bg-slate-900 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-cyan-400"
+                                  style={{ width: `${Math.min(100, (diag.throughput / 60) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Error Counts */}
+                          <td className="py-3 px-4">
+                            <span className={`px-1.5 py-0.5 rounded font-bold ${
+                              hasErrors 
+                                ? "bg-red-500/10 border border-red-500/25 text-red-400 font-extrabold animate-pulse" 
+                                : "text-slate-500"
+                            }`}>
+                              {diag.errors}
+                            </span>
+                          </td>
+
+                          {/* Cryptographic Enclave Proof */}
+                          <td className="py-3 px-4 hidden md:table-cell text-slate-600">
+                            <span className="font-mono text-[9px] bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-900/65">
+                              {shaCode}
+                            </span>
+                          </td>
+
+                          {/* Manual actions */}
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => handleTriggerDiagnosticPing(diag.index)}
+                              className="h-6 px-2.5 rounded bg-purple-600/15 border border-purple-500/20 hover:bg-purple-500/25 hover:border-purple-400/30 text-purple-300 hover:text-purple-100 text-[9px] font-bold tracking-wider transition-all uppercase cursor-pointer"
+                              title="Force full diagnostic unseal"
+                            >
+                              Ping Handshake
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            {/* Real-time Logger stream overlaying diagnostic operations */}
+            <div className="p-4 bg-slate-950/90 border border-slate-900/85 rounded-xl space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  Live Cognitive Link Diagnostic Logger
+                </span>
+                <span className="text-[8px] text-slate-600 uppercase">SYS_LOG_DAEMON_ACTIVE</span>
+              </div>
+              <div className="space-y-1.5 max-h-[140px] overflow-y-auto font-mono text-[9px] leading-relaxed">
+                {diagnostics.map((diag, idx) => {
+                  const agent = agents[diag.index];
+                  if (!agent) return null;
+                  const isFault = diag.handshakeStatus === "FAULT_ISOLATED";
+                  return (
+                    <div key={idx} className="flex items-start gap-2 bg-slate-900/20 p-1.5 rounded border border-slate-950">
+                      <span className="text-slate-600">[{diag.lastChecked}]</span>
+                      <span className="text-slate-400">({agent.name}):</span>
+                      <span className={`flex-1 ${isFault ? 'text-red-400 font-bold' : 'text-slate-350'}`}>
+                        {diag.diagnosticLog}
+                      </span>
+                      <span className={`text-[8px] px-1 py-0.2 rounded font-extrabold ${isFault ? 'bg-red-500/10 text-red-400' : 'bg-slate-950 text-slate-500'}`}>
+                        {diag.handshakeStatus}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

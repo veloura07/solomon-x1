@@ -207,6 +207,74 @@ export default function App() {
   const [isCinematicFading, setIsCinematicFading] = useState(false);
   const [agents, setAgents] = useState<AgentSpec[]>(INITIAL_AGENTS);
   
+  // GSAP individual card pulsing on reputation drift and shuffle tracking
+  const prevRepsRef = useRef<Record<number, number>>({});
+  const prevOrderStrRef = useRef<string>("");
+
+  const sortedAgentsForTray = useMemo(() => {
+    return [...agents].sort((a, b) => b.reputationScore - a.reputationScore);
+  }, [agents]);
+
+  useEffect(() => {
+    // 1. Detect individual reputation changes and trigger pulsing/shaking
+    agents.forEach(a => {
+      const prev = prevRepsRef.current[a.index];
+      if (prev !== undefined && prev !== a.reputationScore) {
+        const diff = a.reputationScore - prev;
+        const element = document.getElementById(`agent-card-${a.index}`);
+        if (element) {
+          if (diff > 0) {
+            // Gained reputation - green pulse & bounce
+            gsap.timeline()
+              .to(element, { 
+                scale: 1.05, 
+                boxShadow: "0 0 12px rgba(34, 197, 94, 0.4)", 
+                borderColor: "#22c55e",
+                duration: 0.15, 
+                ease: "power2.out" 
+              })
+              .to(element, { 
+                scale: 1, 
+                boxShadow: "none", 
+                borderColor: a.index === selectedRingIndex ? "#a855f7" : "#0f172a",
+                duration: 0.25, 
+                ease: "power2.inOut" 
+              });
+          } else if (diff < 0) {
+            // Lost reputation - red shake & glow
+            gsap.timeline()
+              .to(element, { 
+                x: -3, 
+                boxShadow: "0 0 10px rgba(239, 68, 68, 0.3)", 
+                borderColor: "#ef4444", 
+                duration: 0.05, 
+                repeat: 3, 
+                yoyo: true 
+              })
+              .to(element, { 
+                x: 0, 
+                boxShadow: "none", 
+                borderColor: a.index === selectedRingIndex ? "#a855f7" : "#0f172a", 
+                duration: 0.2 
+              });
+          }
+        }
+      }
+      prevRepsRef.current[a.index] = a.reputationScore;
+    });
+
+    // 2. Detect re-ordering within the tray grid
+    const currentOrderStr = sortedAgentsForTray.map(a => a.index).join(",");
+    if (prevOrderStrRef.current && prevOrderStrRef.current !== currentOrderStr) {
+      // Order has changed! Trigger GSAP tray-wide transition
+      gsap.fromTo(".agent-ring-card", 
+        { y: 12, opacity: 0.6, scale: 0.95 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.5, stagger: 0.03, ease: "power2.out" }
+      );
+    }
+    prevOrderStrRef.current = currentOrderStr;
+  }, [agents, sortedAgentsForTray, selectedRingIndex]);
+  
   // Persistent notification history registry
   const [notifications, setNotifications] = useState<{
     id: string;
@@ -248,6 +316,18 @@ export default function App() {
           status: "AUTHORIZED",
           details: `Neural focus shifted to ${INITIAL_AGENTS[idx].name}. Agent instructions swapped cleanly.`
         });
+
+        // Dynamic WebSocket Ring Sync
+        if (wsRef.current && wsRef.current.readyState === 1 /* WebSocket.OPEN */) {
+          try {
+            wsRef.current.send(JSON.stringify({
+              event: "ring_selected",
+              ring_id: INITIAL_AGENTS[idx].name.toLowerCase().replace(" ", "_")
+            }));
+          } catch (e) {
+            console.error("[SolomonOS] Error syncing ring selection over WS:", e);
+          }
+        }
       } else {
         handleAddAuditLog({
           actor: "Sovereignty Gate",
@@ -828,7 +908,9 @@ export default function App() {
       if (countdownInterval) clearInterval(countdownInterval);
       setWsStatus('connecting');
       
-      const wsUrl = (import.meta as any).env?.VITE_SOLOMON_WS_URL || "ws://localhost:8765";
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const defaultWsUrl = `${protocol}//${window.location.host}`;
+      const wsUrl = (import.meta as any).env?.VITE_SOLOMON_WS_URL || defaultWsUrl;
       console.log(`[SolomonOS] Unsealing secure socket channel: ${wsUrl}`);
       
       try {
@@ -859,6 +941,17 @@ export default function App() {
             status: "AUTHORIZED",
             details: `Secure WebSocket interface verified. Connected to local cognitive engine at ${wsUrl}.`
           });
+
+          // Perform handshake & sync initial active ring with the WebSocket server
+          try {
+            socket.send(JSON.stringify({ event: "handshake" }));
+            socket.send(JSON.stringify({
+              event: "ring_selected",
+              ring_id: "ars_regalis" // default starting active ring in App.tsx state is index 9 (Ars Regalis)
+            }));
+          } catch (e) {
+            console.error("[SolomonOS] Error sending initial handshake or ring sync packets:", e);
+          }
         };
 
         socket.onmessage = (event) => {
@@ -1617,18 +1710,24 @@ export default function App() {
 
                   {/* Ring selection Tray Grid */}
                   <div id="archetypes-tray" className="bg-slate-900/30 border border-slate-900 p-4 rounded-2xl">
-                    <div className="text-[10px] text-slate-500 font-mono font-bold uppercase mb-3 flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-purple-400" />
-                      specialised dynamic ring senate
+                    <div className="text-[10px] text-slate-500 font-mono font-bold uppercase mb-3 flex items-center justify-between gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-purple-400" />
+                        specialised dynamic ring senate (sorted by reputation)
+                      </div>
+                      <span className="text-[8px] bg-purple-500/10 border border-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
+                        Dynamic Standing
+                      </span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                      {agents.map((ag) => (
+                      {sortedAgentsForTray.map((ag) => (
                         <button
                           key={ag.index}
+                          id={`agent-card-${ag.index}`}
                           onClick={() => handleSelectRing(ag.index)}
-                          className={`p-2.5 border rounded-xl text-left transition ${
+                          className={`agent-ring-card p-2.5 border rounded-xl text-left transition-all duration-300 relative overflow-hidden ${
                             selectedRingIndex === ag.index
-                              ? "bg-purple-950/20 border-purple-500/35 shadow-lg shadow-purple-500/5 text-purple-200"
+                              ? "bg-purple-950/25 border-purple-500/40 shadow-lg shadow-purple-500/5 text-purple-200"
                               : "bg-slate-950/60 border-slate-900 hover:border-slate-800 text-slate-400"
                           }`}
                         >
@@ -1644,7 +1743,21 @@ export default function App() {
                               </span>
                             )}
                           </div>
-                          <span className="text-[8px] font-mono leading-tight block truncate text-slate-500">{ag.roleDescription}</span>
+                          <span className="text-[8px] font-mono leading-tight block truncate text-slate-500 mb-1.5">{ag.roleDescription}</span>
+                          
+                          {/* Real-time reputation meter inside the tray card */}
+                          <div className="flex items-center justify-between gap-1 font-mono text-[7px] text-slate-500 mt-1">
+                            <span>Reputation</span>
+                            <span className={`${ag.reputationScore < 50 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                              {ag.reputationScore.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="w-full h-0.5 bg-slate-900 rounded-full mt-1 overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-500 ${ag.reputationScore < 50 ? 'bg-red-500' : ag.reputationScore < 75 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                              style={{ width: `${ag.reputationScore}%` }}
+                            />
+                          </div>
                         </button>
                       ))}
                     </div>
