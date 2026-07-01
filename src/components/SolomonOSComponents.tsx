@@ -48,12 +48,27 @@ interface CognitiveResourceEconomyProps {
   agents: AgentSpec[];
   onAddAuditLog: (newLog: any) => void;
   onUpdateAgentPool: (index: number, tokensAdded: number, reputationAdded?: number) => void;
+  runtimeSnapshot?: {
+    taskCounts: {
+      total: number;
+      pending: number;
+      planning: number;
+      running: number;
+      completed: number;
+      failed: number;
+      cancelled: number;
+    };
+    learning: {
+      successRate: number;
+    };
+  } | null;
 }
 
 export function CognitiveResourceEconomy({ 
   agents, 
   onAddAuditLog, 
-  onUpdateAgentPool 
+  onUpdateAgentPool,
+  runtimeSnapshot
 }: CognitiveResourceEconomyProps) {
   const [allocationMode, setAllocationMode] = useState<"equilibrium" | "hyperfocus" | "idle">("equilibrium");
   const [isTransferring, setIsTransferring] = useState(false);
@@ -61,19 +76,20 @@ export function CognitiveResourceEconomy({
   const [globalRingSync, setGlobalRingSync] = useState(true);
 
   // Real-time Token Consumption Rates for Senate Performance Heatmap
-  const [consumptionRates, setConsumptionRates] = useState<number[]>([
-    124, 452, 612, 98, 188, 275, 820, 145, 340, 510
-  ]);
+  const [consumptionRates, setConsumptionRates] = useState<number[]>([]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setConsumptionRates(prev => prev.map(rate => {
-        const change = Math.round((Math.random() - 0.5) * 80);
-        return Math.max(30, Math.min(950, rate + change));
-      }));
-    }, 2800);
-    return () => clearInterval(interval);
-  }, []);
+    const runningLoad = runtimeSnapshot?.taskCounts.running ?? 0;
+    const planningLoad = runtimeSnapshot?.taskCounts.planning ?? 0;
+    const successBoost = Math.round((runtimeSnapshot?.learning.successRate ?? 0.85) * 100);
+
+    setConsumptionRates(agents.map((agent, index) => {
+      const tokenPressure = Math.max(40, Math.round(agent.tokenPool / 3));
+      const taskPressure = (runningLoad * 24) + (planningLoad * 16);
+      const agentTilt = index * 17;
+      return Math.max(30, Math.min(950, tokenPressure + taskPressure + agentTilt + successBoost));
+    }));
+  }, [agents, runtimeSnapshot]);
 
   // States & helper data structures for Recharts Visual Telemetry Dashboard
   const [selectedAgentChartIndex, setSelectedAgentChartIndex] = useState<number>(0);
@@ -240,7 +256,9 @@ export function CognitiveResourceEconomy({
   // Calculate dynamic Resource market indicators
   const totalMarketFees = agents.reduce((sum, a) => sum + (100 - a.reputationScore) * 12, 0);
   const totalStakedTokens = agents.reduce((sum, a) => sum + a.tokenPool, 0);
-  const averageUtilityScore = 7.82; // EV * Confidence / Cost * Latency
+  const averageUtilityScore = runtimeSnapshot
+    ? Number((runtimeSnapshot.learning.successRate * 10).toFixed(2))
+    : 7.82; // EV * Confidence / Cost * Latency
 
   // Algorithmic redistribution of token pools from high-reputation rings to lower-reputation rings
   const triggerEconomyBalancing = () => {

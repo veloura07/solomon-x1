@@ -6,6 +6,22 @@ import { Activity, Zap, Play, Eye, Flame, ShieldAlert } from "lucide-react";
 interface StateTrackerProps {
   telemetryData: TelemetryPoint[];
   onUpdateTelemetry: (newData: TelemetryPoint[]) => void;
+  runtimeSnapshot?: {
+    generatedAt: string;
+    taskCounts: {
+      total: number;
+      pending: number;
+      planning: number;
+      running: number;
+      completed: number;
+      failed: number;
+      cancelled: number;
+    };
+    learning: {
+      totalTasks: number;
+      successRate: number;
+    };
+  } | null;
   bloomThreshold: number;
   setBloomThreshold: (val: number) => void;
   bloomIntensity: number;
@@ -17,6 +33,7 @@ interface StateTrackerProps {
 export default function StateTracker({ 
   telemetryData, 
   onUpdateTelemetry,
+  runtimeSnapshot,
   bloomThreshold,
   setBloomThreshold,
   bloomIntensity,
@@ -42,50 +59,20 @@ export default function StateTracker({
   const triggerSimulation = (mode: "Quiet" | "HeavyCode" | "Distracted") => {
     setActiveSimulationMode(mode);
 
-    // Re-seed telemetry points based on selected activity type
-    const baseData = [] as TelemetryPoint[];
-    let focus = 80;
-    let load = 30;
-    let momentum = 70;
+    const modeScale = mode === "Quiet" ? 0.92 : mode === "HeavyCode" ? 1.12 : 0.78;
+    const loadScale = mode === "Quiet" ? 0.82 : mode === "HeavyCode" ? 1.18 : 0.68;
+    const momentumScale = mode === "Quiet" ? 1.02 : mode === "HeavyCode" ? 1.08 : 0.74;
 
-    for (let i = 0; i < 10; i++) {
-      const minutesAgo = (9 - i) * 5;
-      const timeString = `${minutesAgo}m ago`;
+    const nextTelemetry = telemetryData.map((point, index) => ({
+      ...point,
+      timeIndex: index,
+      focusLevel: Math.max(0, Math.min(100, Math.round(point.focusLevel * modeScale))),
+      cognitiveLoad: Math.max(0, Math.min(100, Math.round(point.cognitiveLoad * loadScale))),
+      momentum: Math.max(0, Math.min(100, Math.round(point.momentum * momentumScale))),
+      geminiLatency: Math.max(100, Math.round((point.geminiLatency ?? 900) * (mode === "HeavyCode" ? 1.15 : mode === "Distracted" ? 0.92 : 0.98))),
+    }));
 
-      if (mode === "Quiet") {
-        focus = Math.max(70, Math.min(100, 85 + Math.random() * 12 - 5));
-        load = Math.max(15, Math.min(60, 25 + Math.random() * 15 - 5));
-        momentum = Math.max(50, Math.min(95, 75 + Math.random() * 10 - 5));
-      } else if (mode === "HeavyCode") {
-        focus = Math.max(80, Math.min(100, 92 + Math.random() * 8 - 4));
-        load = Math.max(55, Math.min(98, 82 + Math.random() * 14 - 7));
-        momentum = Math.max(80, Math.min(100, 90 + Math.random() * 10 - 4));
-      } else {
-        focus = Math.max(20, Math.min(65, 42 + Math.random() * 20 - 10));
-        load = Math.max(10, Math.min(50, 20 + Math.random() * 10 - 5));
-        momentum = Math.max(15, Math.min(55, 30 + Math.random() * 15 - 10));
-      }
-
-      let simulatedLatency = 1000;
-      if (mode === "Quiet") {
-        simulatedLatency = Math.round(400 + load * 10 + Math.random() * 200);
-      } else if (mode === "HeavyCode") {
-        simulatedLatency = Math.round(1500 + load * 22 + Math.random() * 600);
-      } else {
-        simulatedLatency = Math.round(800 + load * 12 + Math.random() * 300);
-      }
-
-      baseData.push({
-        timeIndex: i,
-        timeString,
-        focusLevel: Math.round(focus),
-        cognitiveLoad: Math.round(load),
-        momentum: Math.round(momentum),
-        geminiLatency: simulatedLatency,
-      });
-    }
-
-    onUpdateTelemetry(baseData);
+    onUpdateTelemetry(nextTelemetry);
   };
 
   return (
@@ -101,7 +88,7 @@ export default function StateTracker({
           </div>
           
           <p className="text-[11px] text-slate-400 leading-normal">
-            Interact with your local application workspace layout to simulate real physical input/focus streams automatically.
+            Live runtime snapshot: {runtimeSnapshot ? `${runtimeSnapshot.taskCounts.total} tasks, ${runtimeSnapshot.taskCounts.running} running, ${Math.round(runtimeSnapshot.learning.successRate * 100)}% success.` : "waiting for backend snapshot"}
           </p>
 
           <div className="space-y-2 pt-2">
