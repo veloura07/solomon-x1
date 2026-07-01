@@ -200,6 +200,8 @@ wss.on("connection", (ws: WebSocket & { activeRingId?: string; chatHistories?: R
 app.get("/api/health", (req, res) => {
   res.json({
     status: "online",
+    hasApiKey: !!apiKey,
+    platform: "Solomon X Cognitive Node v1.4.0",
     localTime: new Date().toISOString()
   });
 });
@@ -359,12 +361,7 @@ async function bootstrap() {
   });
 }
 
-export { app };
-
-// Only run the server if this file is run directly
-if (process.env.NODE_ENV !== 'test') {
-  bootstrap().catch(err => {
-    console.error("Fail to start Solomon compute Node:", err);
-    process.exit(1);
-  });
-}
+bootstrap().catch(err => {
+  console.error("Fail to start Solomon compute Node:", err);
+  process.exit(1);
+});

@@ -2,31 +2,19 @@
 <img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
 </div>
 
-# Solomon X
+# Run and deploy your AI Studio app
 
-Solomon X is a React + Vite cognitive control surface backed by an Express/WebSocket server.
+This contains everything you need to run your app locally.
 
-## Architecture
-
-- Frontend: `src/App.tsx` orchestrates the cognitive console, memory cortex, agent senate, trust terminal, and telemetry views.
-- Server: `server.ts` serves the app, handles WebSocket messaging, and exposes `/api/health`, `/api/chat`, and `/api/predict`.
-- Persistence: the main client substrates now persist to `localStorage`, so agents, chat, memory, audit logs, telemetry, and notifications survive reloads.
-- Tests: `src/tests/predict.test.ts` exercises the live server routes with a mocked GenAI client.
+View your app in AI Studio: https://ai.studio/apps/5c80156c-2590-4db7-bc0a-2b78dc0cc6ab
 
 ## Run Locally
 
-**Prerequisites:** Node.js
+**Prerequisites:**  Node.js
+
 
 1. Install dependencies:
    `npm install`
-2. Set `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
-4. Run the tests:
-   `npm run test`
-
-## Notes
-
-- `npm run build` creates the browser bundle and the Node server bundle in `dist/`.
-- `npm run clean` removes generated artifacts using a Windows-safe command.
-- The active implementation is the root workspace; imported reference trees are historical material.

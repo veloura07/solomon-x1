@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Solomon — local AI assistant interface" />
   <title>Solomon</title>
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="css/style.css" />
 
   <!-- FONTS -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -47,7 +47,7 @@
   <div id="ring-tooltip"></div>
 
   <!-- PHASES — order matters, do not change -->
-  <script type="module" src="/js/phase1.js"></script>
+  <script src="js/phase1.js"></script>
   <script>
     // Prevent flash of uninitialized sigil/rings before boot.js runs
     const _origComposerRender = THREE.EffectComposer.prototype.render;
@@ -56,11 +56,11 @@
       _origComposerRender.call(this, deltaTime);
     };
   </script>
-  <script type="module" src="/js/phase2.js"></script>
-  <script type="module" src="/js/phase3.js"></script>
-  <script type="module" src="/js/boot.js"></script>
-  <script type="module" src="/js/warp.js"></script>
-  <script type="module" src="/js/solomon-ws.js"></script>
+  <script src="js/phase2.js"></script>
+  <script src="js/phase3.js"></script>
+  <script src="js/boot.js"></script>
+  <script src="js/warp.js"></script>
+  <script src="js/solomon-ws.js"></script>
 
 </body>
 
