@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   Terminal, 
   ShieldAlert, 
@@ -93,6 +93,14 @@ export default function SovereignConsole({
     8: "TEMPORAL_CLOCK_PARITY",
     9: "CRE_EQUILIBRIUM_V3"
   });
+
+  useEffect(() => {
+    (window as any).ringCalibIntensity = calibIntensity;
+  }, [calibIntensity]);
+
+  useEffect(() => {
+    (window as any).ringCalibSubModes = calibSubModes;
+  }, [calibSubModes]);
 
   // ─── Phase 5: Solomon X Kernel Diagnostics States ───
   const [selectedKernelLayer, setSelectedKernelLayer] = useState<number>(0);
@@ -1088,6 +1096,13 @@ export default function SovereignConsole({
                       {ringObj.agentInstructions.replace("You are ", "Coordinates sovereign instructions specifically for: ")}
                     </p>
 
+                    <NeuralRingWaveVisualizer 
+                      ringIndex={selectedCalibRing}
+                      intensity={calibIntensity[selectedCalibRing]}
+                      subMode={calibSubModes[selectedCalibRing]}
+                      colorHex={"#" + ringObj.accentColor.toString(16).padStart(6, "0")}
+                    />
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Dynamics Slider */}
                       <div className="space-y-1.5">
@@ -1879,6 +1894,209 @@ export default function SovereignConsole({
 
       </div>
 
+    </div>
+  );
+}
+
+interface NeuralRingWaveVisualizerProps {
+  ringIndex: number;
+  intensity: number;
+  subMode: string;
+  colorHex: string;
+}
+
+export function NeuralRingWaveVisualizer({
+  ringIndex,
+  intensity,
+  subMode,
+  colorHex,
+}: NeuralRingWaveVisualizerProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animationId: number;
+    let t = 0;
+
+    const render = () => {
+      if (!canvas || !ctx) return;
+      
+      // Clear with slight alpha to create motion trails
+      ctx.fillStyle = "rgba(2, 1, 12, 0.22)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const width = canvas.width;
+      const height = canvas.height;
+      
+      ctx.lineWidth = 1.6;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = colorHex;
+      ctx.strokeStyle = colorHex;
+
+      t += 0.05 * (0.3 + (intensity / 100) * 1.7);
+
+      ctx.beginPath();
+
+      if (ringIndex === 0) {
+        // Square wave / Firewall gating
+        for (let x = 0; x < width; x++) {
+          const rawWave = Math.sin(x * 0.045 - t * 4);
+          const yVal = rawWave > 0.0 ? 0.6 : -0.6;
+          const smoothedYVal = yVal + 0.1 * Math.cos(x * 0.2);
+          const y = height / 2 + smoothedYVal * height * 0.35;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 1) {
+        // Memory columns filling / Index registers
+        const numBars = 16;
+        const barWidth = width / numBars;
+        ctx.shadowBlur = 4;
+        for (let i = 0; i < numBars; i++) {
+          const fillFactor = 0.25 + 0.7 * Math.sin(t * 1.5 + i * 0.8) * Math.cos(t * 0.8 - i * 0.3);
+          const barHeight = height * 0.6 * fillFactor * (intensity / 100);
+          ctx.fillStyle = `rgba(${parseInt(colorHex.slice(1,3), 16) || 0}, ${parseInt(colorHex.slice(3,5), 16) || 0}, ${parseInt(colorHex.slice(5,7), 16) || 0}, 0.35)`;
+          ctx.fillRect(i * barWidth + 3, height / 2 - barHeight / 2, barWidth - 6, barHeight);
+          ctx.strokeStyle = colorHex;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(i * barWidth + 3, height / 2 - barHeight / 2, barWidth - 6, barHeight);
+        }
+      } else if (ringIndex === 2) {
+        // Chaotic / Quantum skepticism fluctuation waves
+        for (let x = 0; x < width; x++) {
+          const base = Math.sin(x * 0.025 - t * 2.5) * 0.5;
+          const noise = Math.sin(x * 0.18 + t * 9) * 0.25 * (intensity / 100);
+          const y = height / 2 + (base + noise) * height * 0.4;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 3) {
+        // Rapid high-energy loop processing / Sawtooth
+        for (let x = 0; x < width; x++) {
+          const phase = (x * 0.055 - t * 8) % (Math.PI * 2);
+          const yVal = (phase / Math.PI) - 1.0;
+          const y = height / 2 + yVal * height * 0.38;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 4) {
+        // Harmonic Lissajous/Orbital waves
+        for (let x = 0; x < width; x++) {
+          const wave1 = Math.sin(x * 0.022 - t * 2);
+          const wave2 = Math.sin(x * 0.045 + t * 3.5) * 0.4;
+          const wave3 = Math.cos(x * 0.011 - t * 0.8) * 0.25;
+          const y = height / 2 + (wave1 + wave2 + wave3) * height * 0.35;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 5) {
+        // Biometric focus ECG pulse wave
+        for (let x = 0; x < width; x++) {
+          const p = (x - t * 90) % 180;
+          let spike = 0;
+          const normP = p < 0 ? p + 180 : p;
+          if (normP > 40 && normP < 48) {
+            spike = -0.3 * Math.sin((normP - 40) * Math.PI / 8);
+          } else if (normP >= 48 && normP < 58) {
+            spike = 1.4 * Math.sin((normP - 48) * Math.PI / 10);
+          } else if (normP >= 58 && normP < 66) {
+            spike = -0.6 * Math.sin((normP - 58) * Math.PI / 8);
+          }
+          const y = height / 2 + spike * height * 0.32;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 6) {
+        // Secure stable Biometric cosine wave
+        for (let x = 0; x < width; x++) {
+          const y = height / 2 + Math.cos(x * 0.035 - t * 2.2) * height * 0.35;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 7) {
+        // Digital indexing noise spikes
+        for (let x = 0; x < width; x++) {
+          const base = Math.sin(x * 0.018 - t * 1.8) * 0.15;
+          let noise = (Math.random() - 0.5) * 0.08;
+          if (Math.sin(x * 0.12 - t * 15) > 0.94) {
+            noise += (Math.random() - 0.5) * 0.72;
+          }
+          const y = height / 2 + (base + noise) * height * 0.42;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else if (ringIndex === 8) {
+        // Interlocking dual signing clocks
+        for (let x = 0; x < width; x++) {
+          const y = height / 2 + Math.sin(x * 0.038 - t * 2.6) * height * 0.3;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.shadowBlur = 4;
+        ctx.strokeStyle = `rgba(${parseInt(colorHex.slice(1,3), 16) || 0}, ${parseInt(colorHex.slice(3,5), 16) || 0}, ${parseInt(colorHex.slice(5,7), 16) || 0}, 0.35)`;
+        for (let x = 0; x < width; x++) {
+          const y = height / 2 + Math.sin(x * 0.038 - t * 2.6 + Math.PI) * height * 0.3;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      } else {
+        // Senate balance polar circular sweep
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const maxRadius = Math.min(width, height) * 0.42;
+        const currentRadius = maxRadius * (0.55 + 0.4 * Math.sin(t * 1.8));
+        
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(${parseInt(colorHex.slice(1,3), 16) || 0}, ${parseInt(colorHex.slice(3,5), 16) || 0}, ${parseInt(colorHex.slice(5,7), 16) || 0}, 0.4)`;
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 5) {
+          const xEnd = centerX + Math.cos(angle + t * 0.4) * currentRadius;
+          const yEnd = centerY + Math.sin(angle + t * 0.4) * currentRadius;
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY);
+          ctx.lineTo(xEnd, yEnd);
+          ctx.stroke();
+        }
+      }
+
+      animationId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [ringIndex, intensity, subMode, colorHex]);
+
+  return (
+    <div className="relative w-full h-24 bg-[#010107] border border-slate-900 rounded-xl overflow-hidden flex flex-col justify-between p-2">
+      <div className="absolute top-1.5 left-2 flex items-center justify-between right-2 pointer-events-none z-10 select-none">
+        <span className="text-[8px] font-bold text-slate-500 font-mono tracking-wider uppercase">
+          [COGNITIVE PHYSICS WAVEFORM TELEMETRY // {subMode}]
+        </span>
+        <span className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+          INTENSITY: {intensity}%
+        </span>
+      </div>
+      <canvas ref={canvasRef} width={400} height={96} className="w-full h-full block" />
     </div>
   );
 }

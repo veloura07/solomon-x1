@@ -2170,6 +2170,7 @@ export default function ThreeCanvas({
       planetMesh?: THREE.Mesh | THREE.Group;
       planetRing?: THREE.Mesh | THREE.Group;
       orbitalCage?: THREE.Group;
+      nodeGroups?: THREE.Group[];
     }[];
 
     const DOMAIN_NAMES = [
@@ -2405,6 +2406,8 @@ export default function ThreeCanvas({
         clearcoatRoughness: 0.05
       });
 
+      const nodeGroupsArray: THREE.Group[] = [];
+
       for (let i = 0; i < N; i++) {
         const nodeAngle = (i / N) * Math.PI * 2;
         const nodeGroup = new THREE.Group();
@@ -2501,6 +2504,7 @@ export default function ThreeCanvas({
 
         nodeGroup.rotation.z = nodeAngle;
         g.add(nodeGroup);
+        nodeGroupsArray.push(nodeGroup);
       }
 
       g.position.copy(homePos);
@@ -2567,6 +2571,7 @@ export default function ThreeCanvas({
         planetMesh,
         planetRing,
         orbitalCage,
+        nodeGroups: nodeGroupsArray,
       });
     });
 
@@ -3845,6 +3850,103 @@ export default function ThreeCanvas({
         // Layer 6: Planetary Core slow rotation (Core + 6 Hexagonal Nodes unit)
         if (pr.planetMesh) {
           pr.planetMesh.rotation.y += delta * 0.35 * domainFrequency * speedMult;
+        }
+
+        // Layer 7: Custom Runic Node Animations based on Ring Functions
+        if (pr.nodeGroups && pr.nodeGroups.length > 0) {
+          const intensity = (window as any).ringCalibIntensity?.[pr.index] ?? (
+            pr.index === 0 ? 75 :
+            pr.index === 1 ? 80 :
+            pr.index === 2 ? 65 :
+            pr.index === 3 ? 90 :
+            pr.index === 4 ? 70 :
+            pr.index === 5 ? 15 :
+            pr.index === 6 ? 3 :
+            pr.index === 7 ? 85 :
+            pr.index === 8 ? 30 :
+            50
+          );
+          
+          const N = pr.nodeGroups.length;
+          const intensityFactor = intensity / 100;
+          const motionTime = time * (0.4 + intensityFactor * 1.6);
+
+          pr.nodeGroups.forEach((nodeGroup, i) => {
+            const nodeAngle = (i / N) * Math.PI * 2;
+            const baseRad = 8;
+
+            if (pr.index === 0) {
+              // 1. Ars Almadel: Rigid firewall shielding pulsations
+              const breathe = 1.0 + 0.15 * Math.sin(motionTime * 5.0 + i * 0.4) * intensityFactor;
+              nodeGroup.position.set(
+                Math.cos(nodeAngle) * baseRad * breathe,
+                Math.sin(nodeAngle) * baseRad * breathe,
+                0
+              );
+              nodeGroup.scale.setScalar(1.0 + 0.12 * Math.sin(motionTime * 5.0 + i * 0.4) * intensityFactor);
+            } else if (pr.index === 1) {
+              // 2. Ars Notoria: Sequential cascaded indexing register scans
+              const phase = motionTime * 2.5 + i * (Math.PI / 4);
+              nodeGroup.rotation.y = phase;
+              nodeGroup.scale.setScalar(0.9 + 0.22 * Math.sin(phase) * intensityFactor);
+            } else if (pr.index === 2) {
+              // 3. Ars Paulina: Chaotic quantum skepticism fluctuations
+              const fluctuation = Math.sin(motionTime * 7.5 + i * 1.3) * Math.cos(motionTime * 3.2 - i * 0.7);
+              nodeGroup.scale.setScalar(1.0 + 0.3 * fluctuation * intensityFactor);
+              nodeGroup.position.set(
+                Math.cos(nodeAngle) * (baseRad + fluctuation * 0.9 * intensityFactor),
+                Math.sin(nodeAngle) * (baseRad + fluctuation * 0.9 * intensityFactor),
+                fluctuation * 0.7 * intensityFactor
+              );
+            } else if (pr.index === 3) {
+              // 4. Ars Goetia: Rapid sandboxed compute loop execution
+              nodeGroup.rotation.z = nodeAngle + motionTime * 5.0;
+              nodeGroup.scale.setScalar(0.85 + 0.25 * Math.sin(motionTime * 11.0 + i) * intensityFactor);
+            } else if (pr.index === 4) {
+              // 5. Ars Theurgia: Harmonic multidimensional reality graphing
+              nodeGroup.rotation.x = motionTime * 0.618 + i;
+              nodeGroup.rotation.y = motionTime * 1.0 + i * 0.5;
+              nodeGroup.rotation.z = nodeAngle + motionTime * 0.382;
+              nodeGroup.scale.setScalar(1.0 + 0.15 * Math.sin(motionTime * 3.0 + i) * intensityFactor);
+            } else if (pr.index === 5) {
+              // 6. Ars Almiras: Biometric focus telemetry wave shifts
+              const telWave = Math.sin(motionTime * 4.2 + i * Math.PI / 2);
+              nodeGroup.position.set(
+                Math.cos(nodeAngle) * (baseRad + telWave * 1.4 * intensityFactor),
+                Math.sin(nodeAngle) * (baseRad + telWave * 1.4 * intensityFactor),
+                0
+              );
+              nodeGroup.scale.setScalar(0.95 + 0.2 * telWave * intensityFactor);
+            } else if (pr.index === 6) {
+              // 7. Ars Verum: Secure, majestic, absolute authorization gates
+              const authPulse = Math.sin(motionTime * 1.8 + i * Math.PI / 4);
+              nodeGroup.scale.setScalar(1.0 + 0.2 * authPulse * (intensityFactor * 2.0));
+              nodeGroup.rotation.x = authPulse * 0.4 * intensityFactor;
+            } else if (pr.index === 7) {
+              // 8. Ars Ephesia: Jittery high-frequency compaction shards
+              const jitter = Math.sin(motionTime * 22.0 + i) > 0.92 ? (Math.random() - 0.5) * 0.25 * intensityFactor : 0;
+              nodeGroup.position.set(
+                Math.cos(nodeAngle) * baseRad + jitter,
+                Math.sin(nodeAngle) * baseRad + jitter,
+                jitter
+              );
+              nodeGroup.rotation.z = nodeAngle + motionTime * 1.8 + (Math.sin(motionTime * 14.0) * 0.15 * intensityFactor);
+            } else if (pr.index === 8) {
+              // 9. Ars Fulcanelli: Chronological interlocking counter-rotations
+              const dir = (i % 2 === 0 ? 1 : -1);
+              nodeGroup.rotation.y = dir * motionTime * 3.2;
+              nodeGroup.scale.setScalar(0.95 + 0.15 * Math.sin(motionTime * 2.8 + i) * intensityFactor);
+            } else {
+              // 10. Ars Regalis: Senate balance economy iris expansion
+              const iris = Math.sin(motionTime * 2.0 + (i % 2) * Math.PI);
+              nodeGroup.position.set(
+                Math.cos(nodeAngle) * (baseRad + iris * 1.1 * intensityFactor),
+                Math.sin(nodeAngle) * (baseRad + iris * 1.1 * intensityFactor),
+                0
+              );
+              nodeGroup.scale.setScalar(1.0 + 0.15 * iris * intensityFactor);
+            }
+          });
         }
       });
 
