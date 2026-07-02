@@ -3101,7 +3101,7 @@ export default function ThreeCanvas({
         const posAttr = driftingParticles.geometry.attributes.position as THREE.BufferAttribute;
         for (let i = 0; i < PARTICLE_COUNT; i++) {
           let y = posAttr.getY(i) - particleSpeeds[i] * 5.0 * FIXED_TIMESTEP;
-          if (y < -80) {
+          if (y < -80 || isNaN(y)) {
             y = 80;
           }
           posAttr.setY(i, y);
@@ -3149,10 +3149,18 @@ export default function ThreeCanvas({
               pr.rotVelocity.z *= Math.pow(0.95, FIXED_TIMESTEP * 25);
             }
 
+            if (isNaN(pr.rotVelocity.x)) pr.rotVelocity.x = 0.0;
+            if (isNaN(pr.rotVelocity.y)) pr.rotVelocity.y = 0.0;
+            if (isNaN(pr.rotVelocity.z)) pr.rotVelocity.z = 0.0;
+
             // Rotate group coordinates
             pr.group.rotation.x += pr.rotVelocity.x * FIXED_TIMESTEP;
             pr.group.rotation.y += pr.rotVelocity.y * FIXED_TIMESTEP;
             pr.group.rotation.z += pr.rotVelocity.z * FIXED_TIMESTEP;
+
+            if (isNaN(pr.group.rotation.x)) pr.group.rotation.x = pr.initRot.x;
+            if (isNaN(pr.group.rotation.y)) pr.group.rotation.y = pr.initRot.y;
+            if (isNaN(pr.group.rotation.z)) pr.group.rotation.z = pr.initRot.z;
           } else {
             // RESTORING TORSION SPRING AND VISCOUS DAMPING MODEL
             // Returns shortest path angular differences around Euler angles
@@ -3187,10 +3195,18 @@ export default function ThreeCanvas({
             pr.rotVelocity.y *= physicalDrag;
             pr.rotVelocity.z *= physicalDrag;
 
+            if (isNaN(pr.rotVelocity.x)) pr.rotVelocity.x = 0.0;
+            if (isNaN(pr.rotVelocity.y)) pr.rotVelocity.y = 0.0;
+            if (isNaN(pr.rotVelocity.z)) pr.rotVelocity.z = 0.0;
+
             // Apply final integrated rotation step
             pr.group.rotation.x += pr.rotVelocity.x * FIXED_TIMESTEP;
             pr.group.rotation.y += pr.rotVelocity.y * FIXED_TIMESTEP;
             pr.group.rotation.z += pr.rotVelocity.z * FIXED_TIMESTEP;
+
+            if (isNaN(pr.group.rotation.x)) pr.group.rotation.x = pr.initRot.x;
+            if (isNaN(pr.group.rotation.y)) pr.group.rotation.y = pr.initRot.y;
+            if (isNaN(pr.group.rotation.z)) pr.group.rotation.z = pr.initRot.z;
           }
         });
 
@@ -3211,7 +3227,17 @@ export default function ThreeCanvas({
         // Minor pulse distance
         const rad = baseRad + Math.sin(time * 1.2 + sparksOffsets[i]) * 1.5;
         const zValue = Math.cos(time * 0.4 + sparksOffsets[i]) * 3.0;
-        sparksPosAttr.setXYZ(i, Math.cos(ang) * rad, Math.sin(ang) * rad, zValue);
+
+        const sx = Math.cos(ang) * rad;
+        const sy = Math.sin(ang) * rad;
+        const sz = zValue;
+
+        sparksPosAttr.setXYZ(
+          i,
+          isNaN(sx) ? 0.0 : sx,
+          isNaN(sy) ? 0.0 : sy,
+          isNaN(sz) ? 0.0 : sz
+        );
       }
       sparksPosAttr.needsUpdate = true;
 
@@ -3339,9 +3365,13 @@ export default function ThreeCanvas({
           zHeight = Math.sin(phi * 3.0 + time * 8.0) * 0.42;
         }
 
-        wavePosArr[i * 3] = Math.cos(phi) * pRadius;
-        wavePosArr[i * 3 + 1] = Math.sin(phi) * pRadius;
-        wavePosArr[i * 3 + 2] = zHeight;
+        const wx = Math.cos(phi) * pRadius;
+        const wy = Math.sin(phi) * pRadius;
+        const wz = zHeight;
+
+        wavePosArr[i * 3] = isNaN(wx) ? 0.0 : wx;
+        wavePosArr[i * 3 + 1] = isNaN(wy) ? 0.0 : wy;
+        wavePosArr[i * 3 + 2] = isNaN(wz) ? 0.0 : wz;
       }
       wavePosAttr.needsUpdate = true;
 
@@ -3522,9 +3552,13 @@ export default function ThreeCanvas({
               pt.pos.z += Math.sin(pt.age * 2.8) * 0.85;
             }
 
-            posArr[traceCount * 3] = pt.pos.x;
-            posArr[traceCount * 3 + 1] = pt.pos.y;
-            posArr[traceCount * 3 + 2] = pt.pos.z;
+            const px = isNaN(pt.pos.x) ? 0.0 : pt.pos.x;
+            const py = isNaN(pt.pos.y) ? 0.0 : pt.pos.y;
+            const pz = isNaN(pt.pos.z) ? 0.0 : pt.pos.z;
+
+            posArr[traceCount * 3] = px;
+            posArr[traceCount * 3 + 1] = py;
+            posArr[traceCount * 3 + 2] = pz;
 
             colArr[traceCount * 3] = pt.color.r * alpha * 2.5;
             colArr[traceCount * 3 + 1] = pt.color.g * alpha * 2.5;
